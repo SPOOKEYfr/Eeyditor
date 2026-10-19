@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-47%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-63%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -40,10 +40,12 @@ or missing (see [Known limits](#known-limits)).
 | Media import with real ffprobe metadata | ✅ working |
 | Program monitor with real video/image/audio playback | ✅ working (codec-dependent) |
 | Deterministic FFmpeg export (verified end-to-end) | ✅ working |
-| Transitions in monitor/export | 🚧 schema only |
-| Effects in monitor | 🚧 export-only |
-| Real timeline waveforms, mixer UI, subtitles | ❌ not yet |
-| Packaged installers, CI, auto-update | ❌ not yet |
+| Transitions in monitor and export | ✅ working (edge fades) |
+| Effect stack in monitor and export | ✅ working (core subset) |
+| Real waveforms, track mixer, multi-select, clipboard | ✅ working |
+| CI (typecheck, tests, build, cargo check) | ✅ configured |
+| Subtitles, linked A/V, auto-update | ❌ not yet |
+| Packaged installers | ❌ not yet |
 
 ## Features
 
@@ -61,6 +63,15 @@ or missing (see [Known limits](#known-limits)).
   `filter_complex` graph — generated background, scaled/padded/rotated overlays,
   keyframed transforms, animated opacity and audio mixing — then renders through
   the Rust host.
+- **Real audio waveforms** decoded on the Rust side via FFmpeg (min/max/RMS
+  buckets) and cached per source, with a synthetic fallback for generators.
+- **Track mixer and multi-select** — per-track mute/solo/lock/hide, dB gain,
+  shift/ctrl multi-selection with group move, and copy/cut/paste/duplicate for
+  clip groups.
+- **Media import with poster thumbnails** captured in the webview and kept in
+  memory so project files stay small.
+- **Live export progress and cancellation** — the host streams FFmpeg's
+  `-progress` output, and a running render can be cancelled from the export panel.
 - **Tactile dark neumorphism** design system with a sampled brand gradient.
 
 ## Stack
@@ -97,7 +108,7 @@ src/
     layout/                  TitleBar, Splash, MediaBin, Inspector, ExportPanel
   hooks/                     playback clock + keyboard shortcuts
 src-tauri/                   Rust host: save/load, ffmpeg, ffprobe
-tests/                       Vitest suites (schema, keyframes, timeline, export, probe)
+tests/                       Vitest suites (schema, keyframes, timeline, export, probe, media)
 ```
 
 ## Design system
@@ -161,7 +172,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (47 tests)
+npm run test           # Vitest (63 tests)
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
 npm run tauri:dev      # desktop app
@@ -173,10 +184,11 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 47 / 47 passed             |
+| `vitest run`         | 63 / 63 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
 | FFmpeg end-to-end    | 6 / 6 renders passed       |
+| GitHub Actions CI    | web + Rust jobs            |
 
 Rendered fixtures cover empty projects, plain clips, keyframed scale, animated
 opacity (verified monotonic via luma sampling), text overlays, audio-only
@@ -189,21 +201,26 @@ timelines and the full demo project (1920×1080 / 60 fps / H.264 + AAC, 24 s).
 - [x] Bézier keyframe engine and curve editor
 - [x] Deterministic FFmpeg export pipeline
 - [x] Real media probing, monitor playback and audio
-- [ ] Transition rendering in monitor and export
-- [ ] Effects parity between monitor and export
-- [ ] Real timeline waveforms and a track mixer
-- [ ] Multi-select, copy/paste and linked A/V
-- [ ] Packaged installers, CI and auto-update
+- [x] Transition rendering in monitor and export
+- [x] Effect parity between monitor and export (core subset)
+- [x] Real timeline waveforms and a track mixer
+- [x] Multi-select, group move and clipboard operations
+- [x] CI: typecheck, unit tests, web build and `cargo check`
+- [ ] Linked A/V groups and subtitles
+- [ ] Packaged installers and auto-update
 
 ## Known limits
 
 - Monitor playback depends on the platform webview codecs (WebKitGTK +
   GStreamer on Linux); unsupported files fall back to a labelled placeholder.
-- Transitions and effect stacks are compiled into the export graph but are not
-  yet reflected in the monitor.
-- Timeline waveforms are synthesized; real peak extraction from decoded audio is
-  not wired yet.
-- No packaged installer or CI has been produced for this revision.
+- The monitor applies blur, brightness, contrast, saturation, hue, glow and
+  vignette; sharpen, chroma-key and LUT effects remain export-only.
+- Transitions are edge fades/cross-dissolves; wipe and slide types are not yet
+  modelled.
+- Timeline waveforms require the desktop host to decode audio; browser-only
+  development falls back to synthesized peaks.
+- Linked A/V groups, subtitles and auto-update are not implemented.
+- No packaged installer is produced for this revision; CI only checks the tree.
 
 ## Contributing
 
