@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-74%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-76%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -40,7 +40,7 @@ or missing (see [Known limits](#known-limits)).
 | Media import with real ffprobe metadata | ✅ working |
 | Program monitor with real video/image/audio playback | ✅ working (codec-dependent) |
 | Deterministic FFmpeg export (verified end-to-end) | ✅ working |
-| Transitions in monitor and export | ✅ fade, dissolve, wipe, slide |
+| Transitions in monitor and export | ✅ fade, dissolve, zoom, wipe, slide |
 | Effect stack in monitor and export | ✅ working (core subset, incl. chroma key) |
 | Real waveforms, track mixer, multi-select, clipboard | ✅ working |
 | Clip link groups (move/trim/split/delete together) | ✅ working |
@@ -180,7 +180,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (74 tests)
+npm run test           # Vitest (76 tests)
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
 npm run tauri:dev      # desktop app
@@ -192,7 +192,7 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 74 / 74 passed             |
+| `vitest run`         | 76 / 76 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
 | FFmpeg end-to-end    | 11 / 11 renders passed     |
@@ -227,7 +227,8 @@ by sampling per-column luma across the transition.
 - The monitor applies blur, brightness, contrast, saturation, hue, glow,
   vignette, chroma key and an approximate 3x3 unsharp mask. `lut` is currently a
   no-op in both paths (no LUT file picker exists).
-- Zoom transitions currently render as fades rather than a spatial zoom.
+- Zoom transitions scale about the clip anchor with a simultaneous fade; the
+  export scales the padded frame per frame rather than re-cropping the source.
 - Subtitle styling is fixed (white, bottom-centred, translucent box); there is no
   per-cue font or position control yet.
 - Clip link groups are created manually; importing a file does not auto-split its

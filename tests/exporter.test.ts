@@ -51,6 +51,20 @@ describe("ffmpeg export pipeline", () => {
     expect(slidePlan.filterComplex).toContain("1-(t-");
   });
 
+  it("scales zoom transitions per frame instead of fading", () => {
+    const project = createEmptyProject();
+    const track = project.tracks.find((entry) => entry.type === "video");
+    if (!track) throw new Error("missing video track");
+    const clip = createClip({ trackId: track.id, start: 0, duration: 4, kind: "video" });
+    clip.transitionIn = { id: "t", kind: "zoom", duration: 1, direction: "left" };
+    track.clips = [clip];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("1+0.12*");
+    expect(plan.filterComplex).toContain("scale=w=iw*");
+    expect(plan.filterComplex).toContain(":eval=frame");
+    expect(plan.filterComplex).toContain("alphamerge");
+  });
+
   it("burns subtitle cues as timed drawtext overlays", () => {
     const project = createEmptyProject();
     project.subtitles = [{ id: "cue", start: 1, end: 2.5, text: "Hello, world" }];

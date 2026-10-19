@@ -146,3 +146,48 @@ export function slideOffset(clip: TimelineClip, localTime: number, rect: Rect): 
   }
   return { dx, dy };
 }
+
+const ZOOM_AMOUNT = 0.12;
+
+function smoothstep(value: number): number {
+  const p = clamp01(value);
+  return p * p * (3 - 2 * p);
+}
+
+/**
+ * Scale multiplier for zoom transitions, evaluated at clip-relative time.
+ * Starts slightly enlarged and settles at 1 (in), or grows on the way out.
+ */
+export function zoomFactor(clip: TimelineClip, localTime: number): number {
+  let strength = 0;
+  const inDuration = transitionInDuration(clip);
+  if (inDuration > 0 && clip.transitionIn?.kind === "zoom") {
+    strength = Math.max(strength, smoothstep(1 - localTime / inDuration));
+  }
+  const outDuration = transitionOutDuration(clip);
+  if (outDuration > 0 && clip.transitionOut?.kind === "zoom") {
+    strength = Math.max(strength, smoothstep(1 - (clip.duration - localTime) / outDuration));
+  }
+  return 1 + ZOOM_AMOUNT * strength;
+}
+
+/**
+ * Filter-graph scale multiplier for zoom transitions. `timeExpr` must resolve
+ * to clip-relative seconds (the export chain uses global timestamps).
+ */
+export function zoomScaleExpression(clip: TimelineClip, timeExpr: string): string | null {
+  const terms: string[] = [];
+  const inDuration = transitionInDuration(clip);
+  if (inDuration > 0 && clip.transitionIn?.kind === "zoom") {
+    const p = `min(1,max(0,1-(${timeExpr})/${inDuration}))`;
+    terms.push(`(${p})*(${p})*(3-2*(${p}))`);
+  }
+  const outDuration = transitionOutDuration(clip);
+  if (outDuration > 0 && clip.transitionOut?.kind === "zoom") {
+    const p = `min(1,max(0,1-(${clip.duration}-(${timeExpr}))/${outDuration}))`;
+    terms.push(`(${p})*(${p})*(3-2*(${p}))`);
+  }
+  if (!terms.length) return null;
+  const strength = terms.length === 1 ? terms[0] : `max(${terms.join(",")})`;
+  return `1+${ZOOM_AMOUNT}*(${strength})`;
+}

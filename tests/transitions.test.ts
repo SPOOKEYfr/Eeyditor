@@ -5,6 +5,8 @@ import {
   slideOffset,
   transitionOpacityFactor,
   wipeRect,
+  zoomFactor,
+  zoomScaleExpression,
 } from "../src/core/timeline/transitions";
 
 function clipWithTransition(duration = 4) {
@@ -57,6 +59,25 @@ describe("clip transitions", () => {
     expect(wipeRect(clip, 0.5, rect)).toEqual({ x: 100, y: 50, w: 100, h: 100 });
     expect(wipeRect(clip, 0, rect)).toBeNull();
     expect(wipeRect(clip, 2, rect)).toBeUndefined();
+  });
+
+  it("zooms in and out around the clip edges", () => {
+    const clip = createClip({ trackId: "track", start: 0, duration: 4, kind: "video" });
+    clip.transitionIn = { id: "t", kind: "zoom", duration: 1, direction: "left" };
+    expect(zoomFactor(clip, 0)).toBeCloseTo(1.12);
+    expect(zoomFactor(clip, 0.5)).toBeCloseTo(1.06);
+    expect(zoomFactor(clip, 1)).toBeCloseTo(1);
+    expect(zoomFactor(clip, 2)).toBeCloseTo(1);
+    expect(zoomScaleExpression(clip, "t")).toContain("1+0.12*");
+
+    clip.transitionIn = { id: "t", kind: "fade", duration: 1, direction: "left" };
+    clip.transitionOut = { id: "t2", kind: "zoom", duration: 1, direction: "left" };
+    expect(zoomFactor(clip, 3.5)).toBeCloseTo(1.06);
+    expect(zoomFactor(clip, 4)).toBeCloseTo(1.12);
+    expect(zoomScaleExpression(clip, "(t-2)")).toContain("max(");
+
+    clip.transitionOut = undefined;
+    expect(zoomScaleExpression(clip, "t")).toBeNull();
   });
 
   it("slides a clip in from the requested side", () => {

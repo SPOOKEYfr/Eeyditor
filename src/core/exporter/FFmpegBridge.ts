@@ -14,6 +14,7 @@ import {
   isFadeKind,
   transitionInDuration,
   transitionOutDuration,
+  zoomScaleExpression,
 } from "../timeline/transitions";
 
 export interface FfmpegPlan {
@@ -344,6 +345,8 @@ export function buildFfmpegPlan(
     }
 
     const label = `vc${videoCounter++}`;
+    const zoomExpr = zoomScaleExpression(clip, `(t-${f(clip.start)})`);
+    const staged = zoomExpr ? `${label}raw` : label;
     if (animatedOpacity && entry.opacityMaskIndex !== undefined) {
       const base = piecewiseLinearExpression(opacityCurve, fps);
       const factors = [base, transitionExpr, wipeExpr].filter(
@@ -352,15 +355,20 @@ export function buildFfmpegPlan(
       const combined = `min(1,max(0,${factors.map((part) => `(${part})`).join("*")}))`;
       const exprT = combined.replace(/\bt\b/g, "T");
       const lum = escapeFilterGraph(`min(1,max(0,(${exprT})))*255`);
-      filters.push(`${inputLabel}${chain.join(",")}[${label}m]`);
+      filters.push(`${inputLabel}${chain.join(",")}[${staged}m]`);
       filters.push(
-        `[${entry.opacityMaskIndex}:v]format=gray,geq=lum=${lum},scale=${preset.width}:${preset.height}:flags=bilinear,format=gray[${label}k]`,
+        `[${entry.opacityMaskIndex}:v]format=gray,geq=lum=${lum},scale=${preset.width}:${preset.height}:flags=bilinear,format=gray[${staged}k]`,
       );
       filters.push(
-        `[${label}m][${label}k]alphamerge,setpts=PTS+${f(clip.start)}/TB[${label}]`,
+        `[${staged}m][${staged}k]alphamerge,setpts=PTS+${f(clip.start)}/TB[${staged}]`,
       );
     } else {
-      filters.push(`${inputLabel}${chain.join(",")}[${label}]`);
+      filters.push(`${inputLabel}${chain.join(",")}[${staged}]`);
+    }
+    if (zoomExpr) {
+      filters.push(
+        `[${staged}]scale=w=${escapeFilterGraph(`iw*(${zoomExpr})`)}:h=${escapeFilterGraph(`ih*(${zoomExpr})`)}:eval=frame[${label}]`,
+      );
     }
 
     const posX = staticOrExpression(clip.transform.positionX, fps);

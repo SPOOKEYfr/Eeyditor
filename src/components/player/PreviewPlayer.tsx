@@ -25,6 +25,7 @@ import {
   slideOffset,
   transitionOpacityFactor,
   wipeRect,
+  zoomFactor,
 } from "../../core/timeline/transitions";
 import { convertMediaUrl } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
@@ -134,7 +135,8 @@ function drawTextClip(
   ctx.globalAlpha = clamp01(opacity);
   ctx.translate(rect.x + rect.w * (0.5 + posX), rect.y + rect.h * (0.5 + posY));
   ctx.rotate((rotation * Math.PI) / 180);
-  ctx.scale(scaleX, scaleY);
+  const zoom = zoomFactor(clip, local);
+  ctx.scale(scaleX * zoom, scaleY * zoom);
   ctx.fillStyle = text.color;
   ctx.font = `${text.fontWeight} ${text.fontSize * size}px ${text.fontFamily}`;
   ctx.textAlign = text.align;
@@ -171,8 +173,9 @@ function drawMediaClip(
   const posX = evaluateCurve(clip.transform.positionX, local);
   const posY = evaluateCurve(clip.transform.positionY, local);
   const fit = Math.min(rect.w / sourceW, rect.h / sourceH);
-  const drawW = sourceW * fit * scaleX;
-  const drawH = sourceH * fit * scaleY;
+  const zoom = zoomFactor(clip, local);
+  const drawW = sourceW * fit * scaleX * zoom;
+  const drawH = sourceH * fit * scaleY * zoom;
   const fx = canvasEffectPlan(clip.effects);
   const key = chromaKeyStrength(clip.effects);
   const sharpen = effectAmount(clip.effects, "sharpen");
@@ -296,7 +299,8 @@ function drawPlaceholder(
   ctx.globalAlpha = clamp01(opacity);
   ctx.translate(rect.x + rect.w * (0.5 + posX), rect.y + rect.h * (0.5 + posY));
   ctx.rotate((rotation * Math.PI) / 180);
-  ctx.scale(scaleX, scaleY);
+  const zoom = zoomFactor(clip, local);
+  ctx.scale(scaleX * zoom, scaleY * zoom);
   ctx.filter = fx.filter;
   const gradient = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
   if (clip.kind === "generator") {
