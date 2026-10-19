@@ -11,6 +11,7 @@ import {
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { evaluateCurve } from "../../core/keyframes/bezier";
 import { evaluateEnvelope } from "../../core/audio/waveform";
+import { canvasEffectPlan, drawVignette } from "../../core/effects/canvas";
 import { clipEnd, formatTimecode, secondsToFrames } from "../../core/timeline/engine";
 import { convertMediaUrl } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
@@ -159,11 +160,13 @@ function drawMediaClip(
   const fit = Math.min(rect.w / sourceW, rect.h / sourceH);
   const drawW = sourceW * fit * scaleX;
   const drawH = sourceH * fit * scaleY;
+  const fx = canvasEffectPlan(clip.effects);
 
   ctx.save();
   ctx.globalAlpha = clamp01(opacity);
   ctx.translate(rect.x + rect.w * (0.5 + posX), rect.y + rect.h * (0.5 + posY));
   ctx.rotate((rotation * Math.PI) / 180);
+  ctx.filter = fx.filter;
   ctx.drawImage(
     element,
     -drawW * clip.transform.anchorX,
@@ -172,6 +175,12 @@ function drawMediaClip(
     drawH,
   );
   ctx.restore();
+  if (fx.vignette > 0) {
+    ctx.save();
+    ctx.globalAlpha = clamp01(opacity);
+    drawVignette(ctx, rect.x, rect.y, rect.w, rect.h, fx.vignette);
+    ctx.restore();
+  }
   void track;
   return true;
 }
@@ -193,12 +202,14 @@ function drawPlaceholder(
   const posY = evaluateCurve(clip.transform.positionY, local);
   const w = rect.w * 0.6;
   const h = rect.h * 0.6;
+  const fx = canvasEffectPlan(clip.effects);
 
   ctx.save();
   ctx.globalAlpha = clamp01(opacity);
   ctx.translate(rect.x + rect.w * (0.5 + posX), rect.y + rect.h * (0.5 + posY));
   ctx.rotate((rotation * Math.PI) / 180);
   ctx.scale(scaleX, scaleY);
+  ctx.filter = fx.filter;
   const gradient = ctx.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
   if (clip.kind === "generator") {
     gradient.addColorStop(0, BRAND_STOPS[0]);
@@ -219,6 +230,12 @@ function drawPlaceholder(
   ctx.textBaseline = "middle";
   ctx.fillText(clip.name, 0, 0);
   ctx.restore();
+  if (fx.vignette > 0) {
+    ctx.save();
+    ctx.globalAlpha = clamp01(opacity);
+    drawVignette(ctx, rect.x, rect.y, rect.w, rect.h, fx.vignette);
+    ctx.restore();
+  }
   void track;
 }
 
