@@ -237,7 +237,12 @@ export function Timeline() {
         return;
       }
 
-      editorStore.selectClip(clip.id);
+      const additive = event.shiftKey || event.metaKey || event.ctrlKey;
+      if (additive) {
+        editorStore.toggleClipSelection(clip.id);
+      } else if (!editorStore.getState().selectedClipIds.includes(clip.id)) {
+        editorStore.selectClip(clip.id);
+      }
       editorStore.beginInteraction();
       if (x - startX <= EDGE_HANDLE) {
         dragRef.current = { mode: "trim-start", clipId: clip.id };
@@ -271,7 +276,7 @@ export function Timeline() {
       }
 
       if (drag.mode === "move" && drag.clipId) {
-        editorStore.moveClipLive(drag.clipId, time - (drag.grabOffset ?? 0));
+        editorStore.moveClipsLive(drag.clipId, time - (drag.grabOffset ?? 0));
       } else if (drag.mode === "trim-start" && drag.clipId) {
         editorStore.trimClipLive(drag.clipId, "start", time);
       } else if (drag.mode === "trim-end" && drag.clipId) {
@@ -430,7 +435,7 @@ function drawClip(
   zoom: number,
   scroll: number,
 ): void {
-  const selected = editorStore.getState().selectedClipId === clip.id;
+  const selected = editorStore.getState().selectedClipIds.includes(clip.id);
   const top = lane.y + 3;
   const clipHeight = lane.height - 6;
   const drawX = Math.max(x0, -2);

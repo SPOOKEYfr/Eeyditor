@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { editorStore } from "../src/state/editorStore";
-import { createDemoProject } from "../src/core/project/factory";
+import { createDemoProject, createEmptyProject } from "../src/core/project/factory";
 
 function firstClipId(): string {
   const project = editorStore.getState().project;
@@ -35,6 +35,29 @@ describe("clip clipboard", () => {
       .project.tracks.flatMap((track) => track.clips)
       .find((candidate) => candidate.id === selected);
     expect(clip?.start).toBeCloseTo(5);
+  });
+
+  it("moves a multi-selection together and deletes it", () => {
+    editorStore.loadProject(createEmptyProject());
+    const track = editorStore.getState().project.tracks[0];
+    const first = editorStore.addClip(track.id, 1);
+    const second = editorStore.addClip(track.id, 5);
+    editorStore.addClip(track.id, 9);
+    editorStore.selectClip(first);
+    editorStore.toggleClipSelection(second);
+    expect(editorStore.getState().selectedClipIds).toEqual([first, second]);
+    editorStore.beginInteraction();
+    editorStore.moveClipsLive(first, 3);
+    editorStore.commitInteraction("Moved clips");
+    const starts = () =>
+      editorStore
+        .getState()
+        .project.tracks.flatMap((candidate) => candidate.clips)
+        .map((clip) => Math.round(clip.start))
+        .sort((a, b) => a - b);
+    expect(starts()).toEqual([3, 7, 11]);
+    editorStore.rippleDeleteSelected();
+    expect(clipCount()).toBe(1);
   });
 
   it("duplicates inline after the original", () => {

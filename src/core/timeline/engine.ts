@@ -218,6 +218,21 @@ export function moveClip(
   return overwriteRange(clips, clip, newStart);
 }
 
+/** Move several clips on one track to absolute starts, resolving overlaps once. */
+export function moveClipsTo(
+  clips: TimelineClip[],
+  targets: ReadonlyMap<string, number>,
+): TimelineClip[] {
+  if (targets.size === 0) return clips;
+  const moving = clips.filter((clip) => targets.has(clip.id));
+  if (moving.length === 0) return clips;
+  let result = clips.filter((clip) => !targets.has(clip.id));
+  for (const clip of moving) {
+    result = overwriteRange(result, clip, targets.get(clip.id) ?? clip.start);
+  }
+  return sortClips(result);
+}
+
 export type TrimEdge = "start" | "end";
 
 export function trimClip(

@@ -20,6 +20,7 @@ import {
   closeGaps as closeGapsEngine,
   MIN_CLIP_DURATION,
   moveClip as moveClipEngine,
+  moveClipsTo,
   projectDuration,
   rippleDelete as rippleDeleteEngine,
   snapTime,
@@ -48,6 +49,7 @@ export interface EditorState {
   tool: EditorTool;
   snapEnabled: boolean;
   selectedClipId: string | null;
+  selectedClipIds: string[];
   selectedTrackId: string | null;
   status: string;
   showSplash: boolean;
@@ -57,7 +59,7 @@ export interface EditorState {
 
 const HISTORY_LIMIT = 120;
 
-let clipClipboard: TimelineClip | null = null;
+let clipClipboard: TimelineClip[] | null = null;
 
 type TransformKey = "positionX" | "positionY" | "scaleX" | "scaleY" | "rotation" | "opacity";
 const TRANSFORM_KEYS: readonly TransformKey[] = [
@@ -88,6 +90,7 @@ class EditorStore {
       tool: "select",
       snapEnabled: true,
       selectedClipId: project.tracks[0]?.clips[0]?.id ?? null,
+      selectedClipIds: project.tracks[0]?.clips[0]?.id ? [project.tracks[0].clips[0].id] : [],
       selectedTrackId: project.tracks[0]?.id ?? null,
       status: "Ready",
       showSplash: true,
@@ -174,6 +177,45 @@ class EditorStore {
     }), "Moved clip");
   }
 
+  /** Move every selected clip together, preserving relative offsets. */
+  moveClipsLive(anchorId: string, newStart: number): void {
+    const state = this.state;
+    const ids = state.selectedClipIds;
+    const snapshot = this.interactionSnapshot ?? state.project;
+    const snapshotClips = snapshot.tracks.flatMap((track) => track.clips);
+    const anchor = snapshotClips.find((clip) => clip.id === anchorId);
+    if (!anchor || ids.length <= 1) {
+      this.moveClipLive(anchorId, newStart);
+      return;
+    }
+    let target = Math.max(0, newStart);
+    if (state.snapEnabled) {
+      const targets = collectSnapTargets(state.project, anchorId);
+      target = snapTime(target, targets, SNAP_THRESHOLD_PX / state.zoom).time;
+    }
+    const starts = ids.map(
+      (id) => snapshotClips.find((clip) => clip.id === id)?.start ?? Number.POSITIVE_INFINITY,
+    );
+    const minStart = Math.min(...starts);
+    const delta = Math.max(
+      target - anchor.start,
+      Number.isFinite(minStart) ? -minStart : 0,
+    );
+    const targetStarts = new Map<string, number>();
+    for (const id of ids) {
+      const clip = snapshotClips.find((candidate) => candidate.id === id);
+      if (clip) targetStarts.set(id, clip.start + delta);
+    }
+    this.updateProjectLive((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) =>
+        track.clips.some((clip) => targetStarts.has(clip.id))
+          ? { ...track, clips: moveClipsTo(track.clips, targetStarts) }
+          : track,
+      ),
+    }), "Moved clips");
+  }
+
   trimClipLive(clipId: string, edge: "start" | "end", newTime: number): void {
     this.updateProjectLive((project) => ({
       ...project,
@@ -255,7 +297,26 @@ class EditorStore {
           candidate.clips.some((clip) => clip.id === clipId),
         )
       : undefined;
-    this.patch({ selectedClipId: clipId, selectedTrackId: track?.id ?? this.state.selectedTrackId });
+    this.patch({
+      selectedClipId: clipId,
+      selectedClipIds: clipId ? [clipId] : [],
+      selectedTrackId: track?.id ?? this.state.selectedTrackId,
+    });
+  }
+
+  toggleClipSelection(clipId: string): void {
+    const track = this.state.project.tracks.find((candidate) =>
+      candidate.clips.some((clip) => clip.id === clipId),
+    );
+    const selected = new Set(this.state.selectedClipIds);
+    if (selected.has(clipId)) selected.delete(clipId);
+    else selected.add(clipId);
+    const ids = [...selected];
+    this.patch({
+      selectedClipId: selected.has(clipId) ? clipId : (ids[ids.length - 1] ?? null),
+      selectedClipIds: ids,
+      selectedTrackId: track?.id ?? this.state.selectedTrackId,
+    });
   }
 
   selectTrack(trackId: string | null): void {
@@ -265,70 +326,88 @@ class EditorStore {
   // ---- clipboard ---------------------------------------------------------
 
   copySelectedClip(): void {
-    const clip = this.findClip(this.state.selectedClipId);
-    if (!clip) return;
-    clipClipboard = structuredClone(clip);
-    this.patch({ status: `Copied ${clip.name}` });
+    const clips = this.selectedClips();
+    if (clips.length === 0) return;
+    clipClipboard = clips.map((clip) => structuredClone(clip));
+    this.patch({
+      status: clips.length === 1 ? `Copied ${clips[0].name}` : `Copied ${clips.length} clips`,
+    });
   }
 
   cutSelectedClip(): void {
-    if (!this.state.selectedClipId) return;
+    if (this.state.selectedClipIds.length === 0) return;
     this.copySelectedClip();
     this.rippleDeleteSelected();
   }
 
   pasteClipboard(): void {
-    const source = clipClipboard;
-    if (!source) return;
-    const fallbackType: TrackType = source.kind === "audio" ? "audio" : "video";
-    const track =
-      this.state.project.tracks.find((candidate) => candidate.id === source.trackId) ??
-      this.state.project.tracks.find((candidate) => candidate.type === fallbackType) ??
-      this.state.project.tracks[0];
-    if (!track) return;
-    const clip: TimelineClip = {
-      ...structuredClone(source),
-      id: makeId("clip"),
-      trackId: track.id,
-      start: Math.max(0, this.state.playhead),
-    };
+    const sources = clipClipboard;
+    if (!sources || sources.length === 0) return;
+    const anchor = Math.min(...sources.map((source) => source.start));
+    const placed = sources.map((source) => {
+      const fallbackType: TrackType = source.kind === "audio" ? "audio" : "video";
+      const track =
+        this.state.project.tracks.find((candidate) => candidate.id === source.trackId) ??
+        this.state.project.tracks.find((candidate) => candidate.type === fallbackType) ??
+        this.state.project.tracks[0];
+      return {
+        ...structuredClone(source),
+        id: makeId("clip"),
+        trackId: track?.id ?? source.trackId,
+        start: Math.max(0, this.state.playhead + (source.start - anchor)),
+      } satisfies TimelineClip;
+    });
     this.updateProject((project) => ({
       ...project,
-      tracks: project.tracks.map((candidate) =>
-        candidate.id === track.id
-          ? { ...candidate, clips: [...candidate.clips, clip].sort((a, b) => a.start - b.start) }
-          : candidate,
-      ),
-    }), "Pasted clip");
-    this.patch({ selectedClipId: clip.id, selectedTrackId: track.id });
+      tracks: project.tracks.map((candidate) => {
+        const additions = placed.filter((clip) => clip.trackId === candidate.id);
+        if (additions.length === 0) return candidate;
+        return {
+          ...candidate,
+          clips: [...candidate.clips, ...additions].sort((a, b) => a.start - b.start),
+        };
+      }),
+    }), placed.length === 1 ? "Pasted clip" : `Pasted ${placed.length} clips`);
+    this.patch({
+      selectedClipId: placed[placed.length - 1]?.id ?? null,
+      selectedClipIds: placed.map((clip) => clip.id),
+      selectedTrackId: placed[0]?.trackId ?? this.state.selectedTrackId,
+    });
   }
 
   duplicateSelectedClip(): void {
-    const clip = this.findClip(this.state.selectedClipId);
-    if (!clip) return;
-    const copy: TimelineClip = {
-      ...structuredClone(clip),
+    const sources = this.selectedClips();
+    if (sources.length === 0) return;
+    const span = Math.max(...sources.map((clip) => clip.start + clip.duration)) -
+      Math.min(...sources.map((clip) => clip.start));
+    const copies = sources.map((source) => ({
+      ...structuredClone(source),
       id: makeId("clip"),
-      start: clip.start + clip.duration,
-    };
+      start: source.start + span,
+    }));
     this.updateProject((project) => ({
       ...project,
-      tracks: project.tracks.map((candidate) =>
-        candidate.id === clip.trackId
-          ? { ...candidate, clips: [...candidate.clips, copy].sort((a, b) => a.start - b.start) }
-          : candidate,
-      ),
-    }), "Duplicated clip");
-    this.patch({ selectedClipId: copy.id });
+      tracks: project.tracks.map((candidate) => {
+        const additions = copies.filter((clip) => clip.trackId === candidate.id);
+        if (additions.length === 0) return candidate;
+        return {
+          ...candidate,
+          clips: [...candidate.clips, ...additions].sort((a, b) => a.start - b.start),
+        };
+      }),
+    }), copies.length === 1 ? "Duplicated clip" : `Duplicated ${copies.length} clips`);
+    this.patch({
+      selectedClipId: copies[copies.length - 1]?.id ?? null,
+      selectedClipIds: copies.map((clip) => clip.id),
+    });
   }
 
-  private findClip(clipId: string | null): TimelineClip | null {
-    if (!clipId) return null;
-    for (const track of this.state.project.tracks) {
-      const clip = track.clips.find((candidate) => candidate.id === clipId);
-      if (clip) return clip;
-    }
-    return null;
+  private selectedClips(): TimelineClip[] {
+    const ids = new Set(this.state.selectedClipIds);
+    if (ids.size === 0 && this.state.selectedClipId) ids.add(this.state.selectedClipId);
+    return this.state.project.tracks
+      .flatMap((track) => track.clips)
+      .filter((clip) => ids.has(clip.id));
   }
 
   // ---- editing -----------------------------------------------------------
@@ -425,17 +504,25 @@ class EditorStore {
   }
 
   rippleDeleteSelected(): void {
-    const clipId = this.state.selectedClipId;
-    if (!clipId) return;
+    const ids = this.state.selectedClipIds.length > 0
+      ? this.state.selectedClipIds
+      : this.state.selectedClipId
+        ? [this.state.selectedClipId]
+        : [];
+    if (ids.length === 0) return;
     this.updateProject((project) => ({
       ...project,
-      tracks: project.tracks.map((track) =>
-        track.clips.some((clip) => clip.id === clipId)
-          ? { ...track, clips: rippleDeleteEngine(track.clips, clipId) }
-          : track,
-      ),
-    }), "Ripple delete");
-    this.patch({ selectedClipId: null });
+      tracks: project.tracks.map((track) => {
+        const remove = ids.filter((id) => track.clips.some((clip) => clip.id === id));
+        if (remove.length === 0) return track;
+        const clips = remove.reduce(
+          (current, id) => rippleDeleteEngine(current, id),
+          track.clips,
+        );
+        return { ...track, clips };
+      }),
+    }), ids.length === 1 ? "Ripple delete" : `Ripple delete ${ids.length} clips`);
+    this.patch({ selectedClipId: null, selectedClipIds: [] });
   }
 
   closeGaps(trackId: string): void {
@@ -593,6 +680,7 @@ class EditorStore {
       scroll: 0,
       zoom: 48,
       selectedClipId: null,
+      selectedClipIds: [],
       selectedTrackId: project.tracks[0]?.id ?? null,
       status: "New project",
     });
@@ -608,6 +696,7 @@ class EditorStore {
       playing: false,
       scroll: 0,
       selectedClipId: null,
+      selectedClipIds: [],
       selectedTrackId: safe.tracks[0]?.id ?? null,
       status: `Loaded ${safe.name}`,
     });
