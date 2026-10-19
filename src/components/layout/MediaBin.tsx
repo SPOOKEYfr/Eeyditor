@@ -1,9 +1,13 @@
+import { useEffect, useState } from "react";
 import { Film, Image as ImageIcon, Music, Plus, Type } from "lucide-react";
 import type { MediaSource, SourceKind } from "../../types/timeline";
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { createMediaSource, makeId } from "../../core/project/factory";
-import { pickOpenPaths, probeMedia } from "../../lib/tauri";
+import { captureThumbnail } from "../../core/media/thumbnail";
+import { convertMediaUrl, pickOpenPaths, probeMedia } from "../../lib/tauri";
 import { NeumorphicButton, NeumorphicPanel } from "../neumorphic";
+
+const thumbnailCache = new Map<string, string>();
 
 const MEDIA_EXTENSIONS = [
   "mp4",
@@ -45,6 +49,30 @@ function iconForKind(kind: SourceKind): React.ReactNode {
 
 export function MediaBin() {
   const media = useEditorSelector((state) => state.project.media);
+  const [, setThumbVersion] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      let generated = false;
+      for (const source of media) {
+        if (thumbnailCache.has(source.id)) continue;
+        if (source.kind === "generator" || source.kind === "text") continue;
+        const url = await convertMediaUrl(source.path);
+        if (!url || cancelled) continue;
+        const thumb = await captureThumbnail(source, url);
+        if (cancelled) return;
+        if (thumb) {
+          thumbnailCache.set(source.id, thumb);
+          generated = true;
+        }
+      }
+      if (generated && !cancelled) setThumbVersion((version) => version + 1);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [media]);
 
   const addSource = (source: MediaSource) => {
     editorStore.updateProject(
@@ -125,8 +153,16 @@ export function MediaBin() {
             onClick={() => addToTimeline(source)}
             className="flex w-full items-center gap-2 rounded-xl bg-recessed px-2.5 py-2 text-left shadow-recessed-sm transition-colors hover:bg-surface"
           >
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-surface text-amber shadow-raised-sm">
-              {iconForKind(source.kind)}
+            <span className="grid h-9 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface text-amber shadow-raised-sm">
+              {thumbnailCache.get(source.id) ? (
+                <img
+                  src={thumbnailCache.get(source.id)}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                iconForKind(source.kind)
+              )}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate text-xs text-ink">{source.name}</span>
