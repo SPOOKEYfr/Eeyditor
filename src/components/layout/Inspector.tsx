@@ -36,6 +36,7 @@ function findClip(clipId: string | null, project: ReturnType<typeof editorStore.
 export function Inspector() {
   const project = useEditorSelector((state) => state.project);
   const selectedClipId = useEditorSelector((state) => state.selectedClipId);
+  const selectedCount = useEditorSelector((state) => state.selectedClipIds.length);
   const clip = findClip(selectedClipId, project);
 
   if (!clip) {
@@ -93,6 +94,30 @@ export function Inspector() {
           <NeumorphicSlider label="Gain" min={-60} max={12} step={0.5} value={clip.volume.gainDb} formatValue={(v) => `${v.toFixed(1)} dB`} onChange={(v) => setCurveDefault("volume", v)} />
           <NeumorphicSlider label="Fade In" min={0} max={5} step={0.05} value={clip.volume.fadeIn} formatValue={(v) => `${v.toFixed(2)}s`} onChange={(v) => editorStore.updateClip(clip.id, (current) => ({ ...current, volume: { ...current.volume, fadeIn: v } }), "Adjusted fade")} />
           <NeumorphicSlider label="Fade Out" min={0} max={5} step={0.05} value={clip.volume.fadeOut} formatValue={(v) => `${v.toFixed(2)}s`} onChange={(v) => editorStore.updateClip(clip.id, (current) => ({ ...current, volume: { ...current.volume, fadeOut: v } }), "Adjusted fade")} />
+        </Section>
+
+        <Section title="Link">
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              disabled={selectedCount < 2}
+              onClick={() => editorStore.linkSelectedClips()}
+              className="flex-1 rounded-md bg-recessed px-2 py-1 text-[10px] text-muted shadow-recessed-sm transition-colors hover:text-ink disabled:opacity-40"
+            >
+              Link selection
+            </button>
+            <button
+              type="button"
+              disabled={!clip.groupId}
+              onClick={() => editorStore.unlinkSelectedClips()}
+              className="flex-1 rounded-md bg-recessed px-2 py-1 text-[10px] text-muted shadow-recessed-sm transition-colors hover:text-ink disabled:opacity-40"
+            >
+              Unlink
+            </button>
+          </div>
+          <div className="text-[10px] text-muted">
+            {clip.groupId ? `Linked group ${clip.groupId.slice(-6)}` : "Not linked"}
+          </div>
         </Section>
 
         <Section title="Effects">

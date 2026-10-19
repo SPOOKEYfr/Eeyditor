@@ -60,6 +60,44 @@ describe("clip clipboard", () => {
     expect(clipCount()).toBe(1);
   });
 
+  it("links clips so they move, split and delete together", () => {
+    editorStore.loadProject(createEmptyProject());
+    const tracks = editorStore.getState().project.tracks;
+    const video = tracks.find((track) => track.type === "video");
+    const audio = tracks.find((track) => track.type === "audio");
+    if (!video || !audio) throw new Error("missing tracks");
+    const first = editorStore.addClip(video.id, 2);
+    const second = editorStore.addClip(audio.id, 2);
+    editorStore.selectClip(first);
+    editorStore.toggleClipSelection(second);
+    editorStore.linkSelectedClips();
+
+    const linked = editorStore
+      .getState()
+      .project.tracks.flatMap((track) => track.clips)
+      .filter((clip) => clip.groupId);
+    expect(linked).toHaveLength(2);
+    expect(new Set(linked.map((clip) => clip.groupId)).size).toBe(1);
+
+    editorStore.selectClip(first);
+    editorStore.beginInteraction();
+    editorStore.moveClipsLive(first, 4);
+    editorStore.commitInteraction("Moved linked clips");
+    const starts = editorStore
+      .getState()
+      .project.tracks.flatMap((track) => track.clips)
+      .map((clip) => Math.round(clip.start))
+      .sort((a, b) => a - b);
+    expect(starts).toEqual([4, 4]);
+
+    editorStore.splitClipAt(first, 5);
+    expect(clipCount()).toBe(4);
+
+    editorStore.selectClip(first);
+    editorStore.rippleDeleteSelected();
+    expect(clipCount()).toBe(0);
+  });
+
   it("duplicates inline after the original", () => {
     const id = firstClipId();
     editorStore.selectClip(id);

@@ -180,7 +180,7 @@ class EditorStore {
   /** Move every selected clip together, preserving relative offsets. */
   moveClipsLive(anchorId: string, newStart: number): void {
     const state = this.state;
-    const ids = state.selectedClipIds;
+    const ids = this.expandLinked(state.selectedClipIds);
     const snapshot = this.interactionSnapshot ?? state.project;
     const snapshotClips = snapshot.tracks.flatMap((track) => track.clips);
     const anchor = snapshotClips.find((clip) => clip.id === anchorId);
@@ -217,15 +217,16 @@ class EditorStore {
   }
 
   trimClipLive(clipId: string, edge: "start" | "end", newTime: number): void {
+    const ids = new Set(this.expandLinked([clipId]));
     this.updateProjectLive((project) => ({
       ...project,
       tracks: project.tracks.map((track) => ({
         ...track,
         clips: track.clips.map((clip) =>
-          clip.id === clipId ? trimClipEngine(clip, edge, newTime) : clip,
+          ids.has(clip.id) ? trimClipEngine(clip, edge, newTime) : clip,
         ),
       })),
-    }), "Trimmed clip");
+    }), ids.size > 1 ? "Trimmed linked clips" : "Trimmed clip");
   }
 
   // ---- transport ---------------------------------------------------------
@@ -304,6 +305,48 @@ class EditorStore {
     });
   }
 
+  /** Link all selected clips so they move, trim, split and delete together. */
+  linkSelectedClips(): void {
+    const ids = new Set(this.state.selectedClipIds);
+    if (ids.size < 2) {
+      this.patch({ status: "Select at least two clips to link" });
+      return;
+    }
+    const groupId = makeId("link");
+    this.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) => (ids.has(clip.id) ? { ...clip, groupId } : clip)),
+      })),
+    }), `Linked ${ids.size} clips`);
+  }
+
+  /** Break the link group for every clip in the current selection. */
+  unlinkSelectedClips(): void {
+    const selected = new Set(this.state.selectedClipIds);
+    if (this.state.selectedClipId) selected.add(this.state.selectedClipId);
+    const groups = new Set(
+      this.state.project.tracks
+        .flatMap((track) => track.clips)
+        .filter((clip) => selected.has(clip.id) && clip.groupId)
+        .map((clip) => clip.groupId as string),
+    );
+    if (groups.size === 0) {
+      this.patch({ status: "No linked clips selected" });
+      return;
+    }
+    this.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.map((clip) =>
+          clip.groupId && groups.has(clip.groupId) ? { ...clip, groupId: undefined } : clip,
+        ),
+      })),
+    }), "Unlinked clips");
+  }
+
   toggleClipSelection(clipId: string): void {
     const track = this.state.project.tracks.find((candidate) =>
       candidate.clips.some((clip) => clip.id === clipId),
@@ -344,17 +387,25 @@ class EditorStore {
     const sources = clipClipboard;
     if (!sources || sources.length === 0) return;
     const anchor = Math.min(...sources.map((source) => source.start));
+    const groups = new Map<string, string>();
     const placed = sources.map((source) => {
       const fallbackType: TrackType = source.kind === "audio" ? "audio" : "video";
       const track =
         this.state.project.tracks.find((candidate) => candidate.id === source.trackId) ??
         this.state.project.tracks.find((candidate) => candidate.type === fallbackType) ??
         this.state.project.tracks[0];
+      let groupId = source.groupId;
+      if (groupId) {
+        const remapped = groups.get(groupId) ?? makeId("link");
+        groups.set(groupId, remapped);
+        groupId = remapped;
+      }
       return {
         ...structuredClone(source),
         id: makeId("clip"),
         trackId: track?.id ?? source.trackId,
         start: Math.max(0, this.state.playhead + (source.start - anchor)),
+        groupId,
       } satisfies TimelineClip;
     });
     this.updateProject((project) => ({
@@ -380,11 +431,21 @@ class EditorStore {
     if (sources.length === 0) return;
     const span = Math.max(...sources.map((clip) => clip.start + clip.duration)) -
       Math.min(...sources.map((clip) => clip.start));
-    const copies = sources.map((source) => ({
-      ...structuredClone(source),
-      id: makeId("clip"),
-      start: source.start + span,
-    }));
+    const groups = new Map<string, string>();
+    const copies = sources.map((source) => {
+      let groupId = source.groupId;
+      if (groupId) {
+        const remapped = groups.get(groupId) ?? makeId("link");
+        groups.set(groupId, remapped);
+        groupId = remapped;
+      }
+      return {
+        ...structuredClone(source),
+        id: makeId("clip"),
+        start: source.start + span,
+        groupId,
+      };
+    });
     this.updateProject((project) => ({
       ...project,
       tracks: project.tracks.map((candidate) => {
@@ -408,6 +469,23 @@ class EditorStore {
     return this.state.project.tracks
       .flatMap((track) => track.clips)
       .filter((clip) => ids.has(clip.id));
+  }
+
+  /** Expand ids to include every clip sharing a link group with the selection. */
+  private expandLinked(ids: string[]): string[] {
+    const set = new Set(ids);
+    if (set.size === 0) return [];
+    const clips = this.state.project.tracks.flatMap((track) => track.clips);
+    const groups = new Set(
+      clips
+        .filter((clip) => set.has(clip.id) && clip.groupId)
+        .map((clip) => clip.groupId as string),
+    );
+    if (groups.size === 0) return [...set];
+    for (const clip of clips) {
+      if (clip.groupId && groups.has(clip.groupId)) set.add(clip.id);
+    }
+    return [...set];
   }
 
   // ---- editing -----------------------------------------------------------
@@ -483,17 +561,38 @@ class EditorStore {
   }
 
   splitClipAt(clipId: string, time: number): void {
+    const clips = this.state.project.tracks.flatMap((track) => track.clips);
+    const target = clips.find((clip) => clip.id === clipId);
+    if (!target) return;
+    const ids = new Set<string>([clipId]);
+    if (target.groupId) {
+      for (const clip of clips) {
+        if (clip.groupId === target.groupId) ids.add(clip.id);
+      }
+    }
     this.updateProject((project) => ({
       ...project,
       tracks: project.tracks.map((track) => {
-        const clip = track.clips.find((candidate) => candidate.id === clipId);
-        if (!clip) return track;
-        const parts = splitClipEngine(clip, time);
-        if (!parts) return track;
-        const others = track.clips.filter((candidate) => candidate.id !== clipId);
-        return { ...track, clips: [...others, ...parts].sort((a, b) => a.start - b.start) };
+        const parts: TimelineClip[] = [];
+        let changed = false;
+        for (const clip of track.clips) {
+          if (!ids.has(clip.id)) {
+            parts.push(clip);
+            continue;
+          }
+          const split = splitClipEngine(clip, time);
+          if (!split) {
+            parts.push(clip);
+            continue;
+          }
+          parts.push(...split);
+          changed = true;
+        }
+        return changed
+          ? { ...track, clips: parts.sort((a, b) => a.start - b.start) }
+          : track;
       }),
-    }), "Split clip");
+    }), ids.size > 1 ? "Split linked clips" : "Split clip");
   }
 
   splitAtPlayhead(): void {
@@ -504,12 +603,13 @@ class EditorStore {
   }
 
   rippleDeleteSelected(): void {
-    const ids = this.state.selectedClipIds.length > 0
+    const baseIds = this.state.selectedClipIds.length > 0
       ? this.state.selectedClipIds
       : this.state.selectedClipId
         ? [this.state.selectedClipId]
         : [];
-    if (ids.length === 0) return;
+    if (baseIds.length === 0) return;
+    const ids = this.expandLinked(baseIds);
     this.updateProject((project) => ({
       ...project,
       tracks: project.tracks.map((track) => {
