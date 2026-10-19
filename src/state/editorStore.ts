@@ -4,6 +4,7 @@ import {
   type EeyditorProject,
   type Keyframe,
   type KeyframeCurve,
+  type TimelineClip,
   type TrackType,
 } from "../types/timeline";
 import {
@@ -55,6 +56,8 @@ export interface EditorState {
 }
 
 const HISTORY_LIMIT = 120;
+
+let clipClipboard: TimelineClip | null = null;
 
 type TransformKey = "positionX" | "positionY" | "scaleX" | "scaleY" | "rotation" | "opacity";
 const TRANSFORM_KEYS: readonly TransformKey[] = [
@@ -257,6 +260,75 @@ class EditorStore {
 
   selectTrack(trackId: string | null): void {
     this.patch({ selectedTrackId: trackId });
+  }
+
+  // ---- clipboard ---------------------------------------------------------
+
+  copySelectedClip(): void {
+    const clip = this.findClip(this.state.selectedClipId);
+    if (!clip) return;
+    clipClipboard = structuredClone(clip);
+    this.patch({ status: `Copied ${clip.name}` });
+  }
+
+  cutSelectedClip(): void {
+    if (!this.state.selectedClipId) return;
+    this.copySelectedClip();
+    this.rippleDeleteSelected();
+  }
+
+  pasteClipboard(): void {
+    const source = clipClipboard;
+    if (!source) return;
+    const fallbackType: TrackType = source.kind === "audio" ? "audio" : "video";
+    const track =
+      this.state.project.tracks.find((candidate) => candidate.id === source.trackId) ??
+      this.state.project.tracks.find((candidate) => candidate.type === fallbackType) ??
+      this.state.project.tracks[0];
+    if (!track) return;
+    const clip: TimelineClip = {
+      ...structuredClone(source),
+      id: makeId("clip"),
+      trackId: track.id,
+      start: Math.max(0, this.state.playhead),
+    };
+    this.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((candidate) =>
+        candidate.id === track.id
+          ? { ...candidate, clips: [...candidate.clips, clip].sort((a, b) => a.start - b.start) }
+          : candidate,
+      ),
+    }), "Pasted clip");
+    this.patch({ selectedClipId: clip.id, selectedTrackId: track.id });
+  }
+
+  duplicateSelectedClip(): void {
+    const clip = this.findClip(this.state.selectedClipId);
+    if (!clip) return;
+    const copy: TimelineClip = {
+      ...structuredClone(clip),
+      id: makeId("clip"),
+      start: clip.start + clip.duration,
+    };
+    this.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((candidate) =>
+        candidate.id === clip.trackId
+          ? { ...candidate, clips: [...candidate.clips, copy].sort((a, b) => a.start - b.start) }
+          : candidate,
+      ),
+    }), "Duplicated clip");
+    this.patch({ selectedClipId: copy.id });
+  }
+
+  private findClip(clipId: string | null): TimelineClip | null {
+    if (!clipId) return null;
+    for (const track of this.state.project.tracks) {
+      const clip = track.clips.find((candidate) => candidate.id === clipId);
+      if (clip) return clip;
+    }
+    return null;
   }
 
   // ---- editing -----------------------------------------------------------

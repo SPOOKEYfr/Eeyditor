@@ -41,6 +41,26 @@ export function useShortcuts(): void {
         store.splitAtPlayhead();
         return;
       }
+      if (mod && key === "c") {
+        event.preventDefault();
+        store.copySelectedClip();
+        return;
+      }
+      if (mod && key === "x") {
+        event.preventDefault();
+        store.cutSelectedClip();
+        return;
+      }
+      if (mod && key === "v") {
+        event.preventDefault();
+        store.pasteClipboard();
+        return;
+      }
+      if (mod && key === "d") {
+        event.preventDefault();
+        store.duplicateSelectedClip();
+        return;
+      }
       if (mod) return;
 
       switch (key) {
