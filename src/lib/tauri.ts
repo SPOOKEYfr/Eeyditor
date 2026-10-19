@@ -1,4 +1,12 @@
 import { parseProbe, type ProbedMedia } from "../core/media/probe";
+import { peaksToAmplitudes, type Peaks } from "../core/audio/waveform";
+
+interface RawAudioPeaks {
+  min: number[];
+  max: number[];
+  rms: number[];
+  buckets: number;
+}
 
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -47,6 +55,25 @@ export async function convertMediaUrl(path: string): Promise<string> {
 export async function probeMedia(path: string): Promise<ProbedMedia | null> {
   const json = await invokeSafe<string>("probe_media", { path });
   return json ? parseProbe(json) : null;
+}
+
+/** Extract display-ready waveform amplitudes from a media file's audio. */
+export async function audioWaveform(
+  path: string,
+  columns = 1024,
+): Promise<Float32Array | null> {
+  const buckets = Math.max(16, Math.min(16384, columns * 2));
+  const raw = await invokeSafe<RawAudioPeaks>("audio_peaks", { path, buckets });
+  if (!raw || !Array.isArray(raw.min)) return null;
+  const peaks: Peaks = {
+    min: Float32Array.from(raw.min),
+    max: Float32Array.from(raw.max),
+    rms: Float32Array.from(raw.rms),
+    buckets: raw.buckets,
+    sampleRate: 8000,
+    duration: 0,
+  };
+  return peaksToAmplitudes(peaks, columns);
 }
 
 export async function pickOpenPaths(

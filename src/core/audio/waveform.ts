@@ -75,6 +75,26 @@ export function computePeaks(
   };
 }
 
+/** Reduce peaks into `columns` absolute amplitudes for symmetric waveform drawing. */
+export function peaksToAmplitudes(peaks: Peaks, columns: number): Float32Array {
+  const count = Math.max(1, Math.floor(columns));
+  const output = new Float32Array(count);
+  for (let column = 0; column < count; column += 1) {
+    const start = Math.floor((column * peaks.buckets) / count);
+    const end = Math.max(start + 1, Math.floor(((column + 1) * peaks.buckets) / count));
+    let amplitude = 0;
+    for (let bucket = start; bucket < end && bucket < peaks.buckets; bucket += 1) {
+      amplitude = Math.max(
+        amplitude,
+        Math.abs(peaks.min[bucket]),
+        Math.abs(peaks.max[bucket]),
+      );
+    }
+    output[column] = amplitude;
+  }
+  return output;
+}
+
 export interface WaveformColumn {
   min: number;
   max: number;

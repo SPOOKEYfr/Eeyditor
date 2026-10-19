@@ -10,6 +10,90 @@ pub struct RenderResult {
     pub stderr: String,
 }
 
+#[derive(Serialize)]
+pub struct AudioPeaks {
+    pub min: Vec<f32>,
+    pub max: Vec<f32>,
+    pub rms: Vec<f32>,
+    pub buckets: usize,
+}
+
+/// Decode a media file's audio to mono PCM with ffmpeg and reduce it into
+/// min/max/rms buckets for waveform drawing. Runs entirely in the host so the
+/// webview never has to fetch or decode the file itself.
+#[tauri::command]
+fn audio_peaks(path: String, buckets: usize) -> Result<AudioPeaks, String> {
+    let buckets = buckets.clamp(16, 16384);
+    let output = Command::new("ffmpeg")
+        .args([
+            "-v", "error", "-i", &path, "-vn", "-ac", "1", "-ar", "8000", "-f", "s16le", "-",
+        ])
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    let samples: Vec<i16> = output
+        .stdout
+        .chunks_exact(2)
+        .map(|chunk| i16::from_le_bytes([chunk[0], chunk[1]]))
+        .collect();
+    if samples.is_empty() {
+        return Ok(AudioPeaks {
+            min: vec![0.0; buckets],
+            max: vec![0.0; buckets],
+            rms: vec![0.0; buckets],
+            buckets,
+        });
+    }
+
+    let mut min = vec![0f32; buckets];
+    let mut max = vec![0f32; buckets];
+    let mut rms = vec![0f32; buckets];
+    let per_bucket = samples.len() as f32 / buckets as f32;
+
+    for bucket in 0..buckets {
+        let start = ((bucket as f32 * per_bucket) as usize).min(samples.len());
+        let end = (((bucket + 1) as f32 * per_bucket) as usize)
+            .max(start + 1)
+            .min(samples.len());
+        let mut lo = 1f32;
+        let mut hi = -1f32;
+        let mut sum_squares = 0f64;
+        let mut count = 0usize;
+        for value in &samples[start..end] {
+            let normalized = *value as f32 / 32768.0;
+            if normalized < lo {
+                lo = normalized;
+            }
+            if normalized > hi {
+                hi = normalized;
+            }
+            sum_squares += (normalized as f64) * (normalized as f64);
+            count += 1;
+        }
+        if count == 0 {
+            lo = 0.0;
+            hi = 0.0;
+        }
+        min[bucket] = lo;
+        max[bucket] = hi;
+        rms[bucket] = if count > 0 {
+            (sum_squares / count as f64).sqrt() as f32
+        } else {
+            0.0
+        };
+    }
+
+    Ok(AudioPeaks {
+        min,
+        max,
+        rms,
+        buckets,
+    })
+}
+
 /// Atomically persist a `.eeyproj` manifest next to the requested path.
 #[tauri::command]
 fn save_project(path: String, contents: String) -> Result<(), String> {
@@ -85,7 +169,8 @@ pub fn run() {
             load_project,
             ffmpeg_available,
             run_ffmpeg,
-            probe_media
+            probe_media,
+            audio_peaks
         ])
         .run(tauri::generate_context!())
         .expect("error while running Eeyditor");

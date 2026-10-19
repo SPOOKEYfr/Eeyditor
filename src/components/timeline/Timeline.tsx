@@ -23,6 +23,7 @@ import {
   xToTime,
 } from "../../core/timeline/engine";
 import { syntheticChannel } from "../../core/audio/waveform";
+import { audioWaveform } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
 import { TrackHeader } from "./TrackHeader";
 import { KeyframeTrack } from "./KeyframeTrack";
@@ -33,8 +34,14 @@ const EDGE_HANDLE = 8;
 const HEADER_WIDTH = 176;
 
 const waveformCache = new Map<string, Float32Array>();
+const realWaveforms = new Map<string, Float32Array>();
+const pendingWaveforms = new Set<string>();
+
+const WAVEFORM_COLUMNS = 1024;
 
 function waveformFor(clip: TimelineClip): Float32Array {
+  const real = realWaveforms.get(clip.sourceId);
+  if (real) return real;
   const cached = waveformCache.get(clip.id);
   if (cached) return cached;
   const channel = syntheticChannel(256, clip.name.length + 3, clip.volume);
@@ -103,7 +110,25 @@ export function Timeline() {
 
   const tracks = useEditorSelector((state) => state.project.tracks);
   const selectedTrackId = useEditorSelector((state) => state.selectedTrackId);
+  const media = useEditorSelector((state) => state.project.media);
   const visualTick = useEditorSelector((state) => state.project.metadata.modifiedAt);
+
+  useEffect(() => {
+    let cancelled = false;
+    for (const source of media) {
+      if (!source.hasAudio || source.path.startsWith("generator://")) continue;
+      if (realWaveforms.has(source.id) || pendingWaveforms.has(source.id)) continue;
+      pendingWaveforms.add(source.id);
+      void audioWaveform(source.path, WAVEFORM_COLUMNS)
+        .then((channel) => {
+          if (!cancelled && channel) realWaveforms.set(source.id, channel);
+        })
+        .finally(() => pendingWaveforms.delete(source.id));
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [media]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
