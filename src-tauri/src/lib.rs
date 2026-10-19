@@ -160,7 +160,7 @@ fn render_export(
     args: Vec<String>,
 ) -> Result<RenderResult, String> {
     let mut child = Command::new("ffmpeg")
-        .args(["-progress", "pipe:1", "-nostats"])
+        .args(["-progress", "pipe:1", "-nostats", "-loglevel", "error"])
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
