@@ -232,6 +232,9 @@ by sampling per-column luma across the transition.
   per-cue font or position control yet.
 - Clip link groups are created manually; importing a file does not auto-split its
   audio into a linked track.
+- `reversed` playback and non-normal `blendMode` values are persisted by the
+  schema but are not rendered yet.
+- Selection uses shift/ctrl clicks plus group move; there is no marquee drag.
 - Timeline waveforms require the desktop host to decode audio; browser-only
   development falls back to synthesized peaks.
 - Release bundles are produced only when a `v*` tag is pushed; this revision
