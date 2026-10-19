@@ -13,10 +13,12 @@ import { evaluateCurve } from "../../core/keyframes/bezier";
 import { dbToGain, evaluateEnvelope } from "../../core/audio/waveform";
 import {
   applyChromaKey,
+  applySharpen,
   canvasEffectPlan,
   chromaKeyScratch,
   chromaKeyStrength,
   drawVignette,
+  effectAmount,
 } from "../../core/effects/canvas";
 import { clipEnd, formatTimecode, secondsToFrames } from "../../core/timeline/engine";
 import {
@@ -173,6 +175,7 @@ function drawMediaClip(
   const drawH = sourceH * fit * scaleY;
   const fx = canvasEffectPlan(clip.effects);
   const key = chromaKeyStrength(clip.effects);
+  const sharpen = effectAmount(clip.effects, "sharpen");
   const wipe = wipeRect(clip, local, rect);
   const slide = slideOffset(clip, local, rect);
 
@@ -193,7 +196,10 @@ function drawMediaClip(
   );
   ctx.rotate((rotation * Math.PI) / 180);
 
-  const scratch = key > 0 ? chromaKeyScratch(Math.abs(drawW), Math.abs(drawH)) : null;
+  const scratch =
+    key > 0 || sharpen > 0
+      ? chromaKeyScratch(Math.abs(drawW), Math.abs(drawH))
+      : null;
   if (scratch) {
     const { ctx: keyCtx, width: keyWidth, height: keyHeight } = scratch;
     keyCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -202,7 +208,8 @@ function drawMediaClip(
     keyCtx.filter = fx.filter;
     keyCtx.drawImage(element, 0, 0, keyWidth, keyHeight);
     keyCtx.filter = "none";
-    applyChromaKey(keyCtx, keyWidth, keyHeight, key);
+    if (sharpen > 0) applySharpen(keyCtx, keyWidth, keyHeight, sharpen);
+    if (key > 0) applyChromaKey(keyCtx, keyWidth, keyHeight, key);
     ctx.filter = "none";
     ctx.drawImage(
       scratch.canvas,

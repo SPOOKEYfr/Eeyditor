@@ -49,15 +49,20 @@ export function canvasEffectPlan(effects: EffectInstance[]): CanvasEffectPlan {
   return { filter: parts.join(" ") || "none", vignette };
 }
 
-/** Enabled chroma-key strength, or 0 when the clip has no active key. */
-export function chromaKeyStrength(effects: EffectInstance[]): number {
+/** Strongest enabled amount for an effect kind, or 0 when inactive. */
+export function effectAmount(effects: EffectInstance[], kind: EffectInstance["kind"]): number {
   let strength = 0;
   for (const effect of effects) {
-    if (effect.enabled && effect.kind === "chroma-key") {
+    if (effect.enabled && effect.kind === kind) {
       strength = Math.max(strength, effect.amount);
     }
   }
   return strength;
+}
+
+/** Enabled chroma-key strength, or 0 when the clip has no active key. */
+export function chromaKeyStrength(effects: EffectInstance[]): number {
+  return effectAmount(effects, "chroma-key");
 }
 
 const scratch = typeof document !== "undefined" ? document.createElement("canvas") : null;
@@ -104,6 +109,41 @@ export function applyChromaKey(
     }
   }
   ctx.putImageData(image, 0, 0);
+}
+
+/** Approximate the export unsharp mask with a 3x3 convolution. */
+export function applySharpen(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  amount: number,
+): void {
+  const strength = Math.min(2, Math.max(0, amount));
+  if (strength <= 0 || width < 3 || height < 3) return;
+  const source = ctx.getImageData(0, 0, width, height);
+  const target = ctx.createImageData(width, height);
+  const src = source.data;
+  const dst = target.data;
+  const side = strength * 0.5;
+  const center = 1 + side * 4;
+  const row = width * 4;
+  dst.set(src);
+  for (let y = 1; y < height - 1; y += 1) {
+    for (let x = 1; x < width - 1; x += 1) {
+      const index = (y * width + x) * 4;
+      for (let channel = 0; channel < 3; channel += 1) {
+        const value =
+          center * src[index + channel] -
+          side *
+            (src[index - 4 + channel] +
+              src[index + 4 + channel] +
+              src[index - row + channel] +
+              src[index + row + channel]);
+        dst[index + channel] = value < 0 ? 0 : value > 255 ? 255 : value;
+      }
+    }
+  }
+  ctx.putImageData(target, 0, 0);
 }
 
 export function drawVignette(

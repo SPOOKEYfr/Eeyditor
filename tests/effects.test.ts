@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canvasEffectPlan, chromaKeyStrength } from "../src/core/effects/canvas";
+import { canvasEffectPlan, chromaKeyStrength, effectAmount } from "../src/core/effects/canvas";
 import { createEffect } from "../src/core/project/factory";
 
 describe("canvas effect parity", () => {
@@ -29,6 +29,12 @@ describe("canvas effect parity", () => {
   it("uses a no-op filter when nothing is applicable", () => {
     expect(canvasEffectPlan([createEffect("sharpen", 1)]).filter).toBe("none");
     expect(canvasEffectPlan([]).filter).toBe("none");
+  });
+
+  it("reports the strongest enabled amount for an effect kind", () => {
+    expect(effectAmount([], "sharpen")).toBe(0);
+    expect(effectAmount([createEffect("sharpen", 1.5)], "sharpen")).toBeCloseTo(1.5);
+    expect(effectAmount([{ ...createEffect("sharpen", 1.5), enabled: false }], "sharpen")).toBe(0);
   });
 
   it("reports the strongest enabled chroma-key", () => {
