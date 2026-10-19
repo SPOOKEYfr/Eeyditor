@@ -1,0 +1,65 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+dist-ssr/
+*.local
+src-tauri/target/
+src-tauri/gen/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Reverse-engineering work, dumps and analysis (never tracked)
+.rea/
+targets/
+/targets/
+dumps/
+analysis/
+*.eeyproj.bak
+
+# Raw media and render output
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.avi
+*.wav
+*.mp3
+*.aac
+*.flac
+*.m4a
+*.ogg
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
+!src/assets/**
+!src-tauri/icons/**
+!public/**
+# Generated mobile icon sets (desktop icons are kept)
+src-tauri/icons/android/
+src-tauri/icons/ios/
+export/
+renders/
+
+# Environment
+.env
+.env.*
+!.env.example
