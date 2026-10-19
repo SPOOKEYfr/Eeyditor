@@ -191,38 +191,63 @@ export function Inspector() {
             ))}
           </div>
           {clip.effects.map((effect) => (
-            <div key={effect.id} className="mt-1.5 flex items-center gap-2 rounded-lg bg-recessed px-2 py-1.5 shadow-recessed-sm">
-              <span className="flex-1 text-[11px] text-ink">{effect.kind}</span>
+            <div key={effect.id} className="mt-1.5 rounded-lg bg-recessed px-2 py-1.5 shadow-recessed-sm">
+              <div className="flex items-center gap-2">
+                <span className="flex-1 text-[11px] text-ink">{effect.kind}</span>
+                <span className="font-mono text-[9px] text-muted">{effect.amount.toFixed(2)}</span>
+                <input
+                  type="checkbox"
+                  checked={effect.enabled}
+                  onChange={(event) =>
+                    editorStore.updateClip(
+                      clip.id,
+                      (current) => ({
+                        ...current,
+                        effects: current.effects.map((entry) =>
+                          entry.id === effect.id ? { ...entry, enabled: event.target.checked } : entry,
+                        ),
+                      }),
+                      "Toggled effect",
+                    )
+                  }
+                  className="accent-amber"
+                />
+                <button
+                  type="button"
+                  onClick={() =>
+                    editorStore.updateClip(
+                      clip.id,
+                      (current) => ({ ...current, effects: current.effects.filter((entry) => entry.id !== effect.id) }),
+                      "Removed effect",
+                    )
+                  }
+                  className="grid h-5 w-5 place-items-center rounded text-muted hover:text-magenta"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
               <input
-                type="checkbox"
-                checked={effect.enabled}
+                type="range"
+                min={0}
+                max={2}
+                step={0.05}
+                value={effect.amount}
                 onChange={(event) =>
                   editorStore.updateClip(
                     clip.id,
                     (current) => ({
                       ...current,
                       effects: current.effects.map((entry) =>
-                        entry.id === effect.id ? { ...entry, enabled: event.target.checked } : entry,
+                        entry.id === effect.id
+                          ? { ...entry, amount: Number(event.target.value) }
+                          : entry,
                       ),
                     }),
-                    "Toggled effect",
+                    "Adjusted effect",
                   )
                 }
-                className="accent-amber"
+                className="mt-1 w-full accent-amber"
               />
-              <button
-                type="button"
-                onClick={() =>
-                  editorStore.updateClip(
-                    clip.id,
-                    (current) => ({ ...current, effects: current.effects.filter((entry) => entry.id !== effect.id) }),
-                    "Removed effect",
-                  )
-                }
-                className="grid h-5 w-5 place-items-center rounded text-muted hover:text-magenta"
-              >
-                <Trash2 size={12} />
-              </button>
             </div>
           ))}
         </Section>
