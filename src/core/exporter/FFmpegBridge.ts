@@ -480,8 +480,11 @@ function effectFilter(kind: string, amount: number): string {
       return "vignette";
     case "glow":
       return `gblur=sigma=${f(Math.max(0, amount * 6))}`;
-    case "chroma-key":
-      return "colorkey=green:0.3:0.15";
+    case "chroma-key": {
+      const similarity = Math.min(1, 0.2 + Math.max(0, amount) * 0.1);
+      const blend = Math.min(1, 0.1 + Math.max(0, amount) * 0.05);
+      return `colorkey=green:${f(similarity)}:${f(blend)}`;
+    }
     default:
       return "null";
   }

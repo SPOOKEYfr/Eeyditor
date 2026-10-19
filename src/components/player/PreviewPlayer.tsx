@@ -11,7 +11,13 @@ import {
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { evaluateCurve } from "../../core/keyframes/bezier";
 import { dbToGain, evaluateEnvelope } from "../../core/audio/waveform";
-import { canvasEffectPlan, drawVignette } from "../../core/effects/canvas";
+import {
+  applyChromaKey,
+  canvasEffectPlan,
+  chromaKeyScratch,
+  chromaKeyStrength,
+  drawVignette,
+} from "../../core/effects/canvas";
 import { clipEnd, formatTimecode, secondsToFrames } from "../../core/timeline/engine";
 import { transitionOpacityFactor } from "../../core/timeline/transitions";
 import { convertMediaUrl } from "../../lib/tauri";
@@ -162,19 +168,41 @@ function drawMediaClip(
   const drawW = sourceW * fit * scaleX;
   const drawH = sourceH * fit * scaleY;
   const fx = canvasEffectPlan(clip.effects);
+  const key = chromaKeyStrength(clip.effects);
 
   ctx.save();
   ctx.globalAlpha = clamp01(opacity);
   ctx.translate(rect.x + rect.w * (0.5 + posX), rect.y + rect.h * (0.5 + posY));
   ctx.rotate((rotation * Math.PI) / 180);
-  ctx.filter = fx.filter;
-  ctx.drawImage(
-    element,
-    -drawW * clip.transform.anchorX,
-    -drawH * clip.transform.anchorY,
-    drawW,
-    drawH,
-  );
+
+  const scratch = key > 0 ? chromaKeyScratch(Math.abs(drawW), Math.abs(drawH)) : null;
+  if (scratch) {
+    const { ctx: keyCtx, width: keyWidth, height: keyHeight } = scratch;
+    keyCtx.setTransform(1, 0, 0, 1, 0, 0);
+    keyCtx.globalAlpha = 1;
+    keyCtx.clearRect(0, 0, keyWidth, keyHeight);
+    keyCtx.filter = fx.filter;
+    keyCtx.drawImage(element, 0, 0, keyWidth, keyHeight);
+    keyCtx.filter = "none";
+    applyChromaKey(keyCtx, keyWidth, keyHeight, key);
+    ctx.filter = "none";
+    ctx.drawImage(
+      scratch.canvas,
+      -drawW * clip.transform.anchorX,
+      -drawH * clip.transform.anchorY,
+      drawW,
+      drawH,
+    );
+  } else {
+    ctx.filter = fx.filter;
+    ctx.drawImage(
+      element,
+      -drawW * clip.transform.anchorX,
+      -drawH * clip.transform.anchorY,
+      drawW,
+      drawH,
+    );
+  }
   ctx.restore();
   if (fx.vignette > 0) {
     ctx.save();
