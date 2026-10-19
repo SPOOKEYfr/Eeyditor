@@ -291,6 +291,7 @@ export function createEmptyProject(name = "Untitled Project"): EeyditorProject {
       createTrack("audio", 0, "Audio 1"),
     ],
     markers: [],
+    subtitles: [],
     media: [],
     renderPreset: { ...RENDER_PRESETS[1] },
     metadata: {

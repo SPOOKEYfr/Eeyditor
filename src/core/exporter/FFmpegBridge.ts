@@ -370,7 +370,28 @@ export function buildFfmpegPlan(
     videoCursor = next;
   }
 
-  filters.push(`${videoCursor}format=${preset.pixelFormat}[vout]`);
+  let subtitleCursor = videoCursor;
+  const subtitleSize = Math.max(12, Math.round(project.resolution.height * 0.045));
+  project.subtitles.forEach((cue, index) => {
+    if (!cue.text.trim() || cue.end <= cue.start) return;
+    const parts = [
+      `text=${escapeDrawtext(cue.text)}`,
+      "fontcolor=white",
+      `fontsize=${subtitleSize}`,
+      "line_spacing=6",
+      "box=1",
+      "boxcolor=black@0.55",
+      "boxborderw=10",
+      "x=(w-text_w)/2",
+      "y=h-text_h-h*0.06",
+      `enable=${escapeFilterGraph(`between(t,${f(cue.start)},${f(cue.end)})`)}`,
+    ];
+    const next = `[sub${index}]`;
+    filters.push(`${subtitleCursor}drawtext=${parts.join(":")}${next}`);
+    subtitleCursor = next;
+  });
+
+  filters.push(`${subtitleCursor}format=${preset.pixelFormat}[vout]`);
 
   const audioLabels: string[] = [];
   let audioCounter = 0;

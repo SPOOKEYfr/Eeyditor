@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Film, Image as ImageIcon, Music, Plus, Type } from "lucide-react";
+import { FileText, Film, Image as ImageIcon, Music, Plus, Type } from "lucide-react";
 import type { MediaSource, SourceKind } from "../../types/timeline";
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { createMediaSource, makeId } from "../../core/project/factory";
 import { captureThumbnail } from "../../core/media/thumbnail";
-import { convertMediaUrl, pickOpenPaths, probeMedia } from "../../lib/tauri";
+import { parseSrt } from "../../core/subtitles/srt";
+import { convertMediaUrl, invokeSafe, pickOpenPaths, probeMedia } from "../../lib/tauri";
 import { NeumorphicButton, NeumorphicPanel } from "../neumorphic";
 
 const thumbnailCache = new Map<string, string>();
@@ -49,6 +50,7 @@ function iconForKind(kind: SourceKind): React.ReactNode {
 
 export function MediaBin() {
   const media = useEditorSelector((state) => state.project.media);
+  const subtitles = useEditorSelector((state) => state.project.subtitles);
   const [, setThumbVersion] = useState(0);
 
   useEffect(() => {
@@ -78,6 +80,48 @@ export function MediaBin() {
     editorStore.updateProject(
       (project) => ({ ...project, media: [...project.media, source] }),
       "Added media",
+    );
+  };
+
+  const handleImportSubtitles = async () => {
+    const paths = await pickOpenPaths(["srt"], false);
+    if (paths.length === 0) return;
+    const contents = await invokeSafe<string>("load_project", { path: paths[0] });
+    if (!contents) {
+      editorStore.setStatus("Subtitle import needs the desktop app");
+      return;
+    }
+    const cues = parseSrt(contents);
+    if (cues.length === 0) {
+      editorStore.setStatus("No valid cues found in the subtitle file");
+      return;
+    }
+    editorStore.updateProject(
+      (project) => ({ ...project, subtitles: cues }),
+      `Imported ${cues.length} subtitle cues`,
+    );
+  };
+
+  const handleAddCue = () => {
+    const text = window.prompt("Subtitle text for the next 2 seconds");
+    if (!text || !text.trim()) return;
+    const start = editorStore.getState().playhead;
+    editorStore.updateProject(
+      (project) => ({
+        ...project,
+        subtitles: [
+          ...project.subtitles,
+          { id: makeId("cue"), start, end: start + 2, text: text.trim() },
+        ].sort((a, b) => a.start - b.start),
+      }),
+      "Added subtitle cue",
+    );
+  };
+
+  const handleClearSubtitles = () => {
+    editorStore.updateProject(
+      (project) => ({ ...project, subtitles: [] }),
+      "Cleared subtitles",
     );
   };
 
@@ -138,9 +182,23 @@ export function MediaBin() {
 
   return (
     <NeumorphicPanel title="Media" className="flex h-full min-h-0 flex-col" actions={
-      <NeumorphicButton size="sm" iconOnly title="Import media" onClick={handleImport} icon={<Plus size={14} />} />
+      <>
+        <NeumorphicButton size="sm" iconOnly title="Import media" onClick={handleImport} icon={<Plus size={14} />} />
+        <NeumorphicButton size="sm" iconOnly title="Import SRT subtitles" onClick={handleImportSubtitles} icon={<FileText size={14} />} />
+      </>
     }>
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+        <div className="flex items-center gap-1.5 rounded-lg bg-recessed px-2 py-1.5 text-[10px] text-muted shadow-recessed-sm">
+          <span className="flex-1">{subtitles.length} subtitle cues</span>
+          <button type="button" onClick={handleAddCue} className="transition-colors hover:text-ink">
+            Add cue
+          </button>
+          {subtitles.length > 0 && (
+            <button type="button" onClick={handleClearSubtitles} className="transition-colors hover:text-magenta">
+              Clear
+            </button>
+          )}
+        </div>
         {media.length === 0 && (
           <p className="px-1 py-4 text-xs text-muted">
             No assets yet. Import media or add a generated field.

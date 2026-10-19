@@ -15,6 +15,7 @@ import {
   type ProjectMetadata,
   type RenderPreset,
   type SourceKind,
+  type SubtitleCue,
   type TextOverlay,
   type TimelineClip,
   type TimelineMarker,
@@ -402,6 +403,18 @@ function normalizeMarker(value: unknown, path: string): TimelineMarker {
   };
 }
 
+function normalizeSubtitle(value: unknown, path: string): SubtitleCue {
+  const record = asRecord(value, path);
+  const start = Math.max(0, num(record.start, `${path}.start`, 0));
+  const end = Math.max(start, num(record.end, `${path}.end`, start));
+  return {
+    id: str(record.id, `${path}.id`, `cue-${start.toFixed(3)}`),
+    start,
+    end,
+    text: str(record.text, `${path}.text`, ""),
+  };
+}
+
 function normalizePreset(value: unknown, path: string): RenderPreset {
   const record = value === undefined ? {} : asRecord(value, path);
   return {
@@ -468,6 +481,9 @@ export function normalizeProject(value: unknown): EeyditorProject {
     ),
     markers: arr(record.markers, "project.markers").map((entry, index) =>
       normalizeMarker(entry, `project.markers[${index}]`),
+    ),
+    subtitles: arr(record.subtitles, "project.subtitles").map((entry, index) =>
+      normalizeSubtitle(entry, `project.subtitles[${index}]`),
     ),
     media: arr(record.media, "project.media").map((entry, index) =>
       normalizeMedia(entry, `project.media[${index}]`),

@@ -266,6 +266,15 @@ export interface ProjectMetadata {
   modifiedAt: string;
 }
 
+export interface SubtitleCue {
+  id: string;
+  /** Timeline-relative start in seconds. */
+  start: number;
+  /** Timeline-relative end in seconds. */
+  end: number;
+  text: string;
+}
+
 export interface EeyditorProject {
   schemaVersion: number;
   id: string;
@@ -277,6 +286,7 @@ export interface EeyditorProject {
   duration: number;
   tracks: TimelineTrack[];
   markers: TimelineMarker[];
+  subtitles: SubtitleCue[];
   media: MediaSource[];
   renderPreset: RenderPreset;
   metadata: ProjectMetadata;

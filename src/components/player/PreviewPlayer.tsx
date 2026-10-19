@@ -214,6 +214,40 @@ function drawMediaClip(
   return true;
 }
 
+function drawSubtitles(
+  ctx: CanvasRenderingContext2D,
+  cues: { start: number; end: number; text: string }[],
+  playhead: number,
+  rect: FrameRect,
+): void {
+  const cue = cues.find((entry) => playhead >= entry.start && playhead < entry.end);
+  if (!cue || !cue.text.trim()) return;
+  const fontSize = Math.max(9, rect.h * 0.045);
+  const lines = cue.text.split("\n");
+  const lineHeight = fontSize * 1.25;
+  const padding = fontSize * 0.4;
+  ctx.save();
+  ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  const width = Math.max(...lines.map((line) => ctx.measureText(line).width));
+  const height = lines.length * lineHeight;
+  const cx = rect.x + rect.w / 2;
+  const bottom = rect.y + rect.h - rect.h * 0.06;
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(
+    cx - width / 2 - padding,
+    bottom - height - padding * 0.6,
+    width + padding * 2,
+    height + padding * 1.2,
+  );
+  ctx.fillStyle = "#FFFFFF";
+  lines.forEach((line, index) => {
+    ctx.fillText(line, cx, bottom - (lines.length - 1 - index) * lineHeight);
+  });
+  ctx.restore();
+}
+
 function drawPlaceholder(
   ctx: CanvasRenderingContext2D,
   clip: TimelineClip,
@@ -579,6 +613,8 @@ export function PreviewPlayer() {
       const audible = !track.hidden && !track.muted && (hasSolo ? track.solo : true);
       syncPlayable(element, clip, track, playhead, state.playing, audible, entry, now);
     }
+
+    drawSubtitles(ctx, project.subtitles, playhead, rect);
 
     for (const [id, entry] of poolRef.current) {
       if (!used.has(id)) pauseEntry(entry);

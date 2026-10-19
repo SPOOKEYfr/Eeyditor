@@ -378,6 +378,7 @@ export function emptyProjectShell(): EeyditorProject {
     duration: 0,
     tracks: [],
     markers: [],
+    subtitles: [],
     media: [],
     renderPreset: {
       id: "custom",

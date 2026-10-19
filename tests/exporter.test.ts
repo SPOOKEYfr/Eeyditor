@@ -33,6 +33,15 @@ describe("ffmpeg export pipeline", () => {
     expect(plan.audioLabel).toBe("aout");
   });
 
+  it("burns subtitle cues as timed drawtext overlays", () => {
+    const project = createEmptyProject();
+    project.subtitles = [{ id: "cue", start: 1, end: 2.5, text: "Hello, world" }];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("drawtext=text=Hello\\, world");
+    expect(plan.filterComplex).toContain("enable=between(t\\,1\\,2.5)");
+    expect(plan.filterComplex).toContain("boxcolor=black@0.55");
+  });
+
   it("emits an empty-project plan that still renders a background", () => {
     const project = createEmptyProject();
     const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
