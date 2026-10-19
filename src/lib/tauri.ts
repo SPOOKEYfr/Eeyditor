@@ -18,6 +18,31 @@ export async function invokeSafe<T>(
   }
 }
 
+const mediaUrlCache = new Map<string, string>();
+
+/**
+ * Resolve a local media path into a URL the webview can decode. In the desktop
+ * build this uses Tauri's asset protocol; in a browser the path is passed
+ * through unchanged (used for blob URLs during development).
+ */
+export async function convertMediaUrl(path: string): Promise<string> {
+  if (!path || path.startsWith("generator://")) return "";
+  const cached = mediaUrlCache.get(path);
+  if (cached) return cached;
+  let url = path;
+  if (isTauri()) {
+    try {
+      const { convertFileSrc } = await import("@tauri-apps/api/core");
+      url = convertFileSrc(path);
+    } catch (error) {
+      console.error("[eeyditor] asset URL conversion failed", error);
+      return "";
+    }
+  }
+  mediaUrlCache.set(path, url);
+  return url;
+}
+
 /** Read real duration/stream metadata for a media file via ffprobe. */
 export async function probeMedia(path: string): Promise<ProbedMedia | null> {
   const json = await invokeSafe<string>("probe_media", { path });

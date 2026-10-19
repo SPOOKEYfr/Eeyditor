@@ -21,8 +21,10 @@ Eeyditor logo (src/assets/logo.png)
 - **Keyframe engine** with linear, hold and cubic Bézier interpolation, an
   interactive Bézier curve editor and per-property animation for opacity,
   scale, position, rotation and volume.
-- **Real-time program monitor** with a 2D transform matrix, blend-aware
-  overlays, safe-frame guides and a live WebAudio waveform scope.
+- **Real-time program monitor** that decodes imported video/image media through
+  Tauri's asset protocol, composites frames with the same transform matrix used
+  by the export pipeline, plays real audio (per-clip gain and fades) and draws a
+  live analyser scope.
 - **Deterministic export** that compiles the timeline into one FFmpeg
   `filter_complex` graph (multi-track overlay, keyframed transforms, audio
   mixing, fades, transitions) and renders through the Rust host.
@@ -60,17 +62,18 @@ src/
     project/serialize.ts     validation + serialize/parse round trip
     keyframes/bezier.ts      cubic Bézier solver and curve evaluation
     timeline/engine.ts       timecode, snapping, trim, split, ripple edits
-    audio/waveform.ts        peak extraction, envelopes, synthetic preview
+    audio/waveform.ts        peak extraction, envelopes, gain math
+    media/probe.ts           ffprobe JSON reduction (duration, fps, streams)
     exporter/FFmpegBridge.ts filtergraph compiler
   state/editorStore.ts       observable store, undo/redo, gestures
   components/
     neumorphic/              the component kit
     timeline/                Timeline + KeyframeTrack (canvas)
-    player/PreviewPlayer.tsx WebAudio-synced monitor
+    player/PreviewPlayer.tsx media-decoding monitor (canvas + audio)
     layout/                  TitleBar, Splash, MediaBin, Inspector, ExportPanel
   hooks/                     playback clock + keyboard shortcuts
 src-tauri/                   Rust host: save/load, ffmpeg, ffprobe
-tests/                       Vitest suites (schema, keyframes, timeline, export)
+tests/                       Vitest suites (schema, keyframes, timeline, export, probe)
 ```
 
 ### Project format
@@ -109,7 +112,7 @@ Requires Node 20+/22+, Rust (stable) and the Tauri system libraries
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (42 tests)
+npm run test           # Vitest (47 tests)
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
 npm run tauri:dev      # desktop app
@@ -121,7 +124,7 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 42 / 42 passed             |
+| `vitest run`         | 47 / 47 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
 | FFmpeg end-to-end    | 6 / 6 renders passed       |
@@ -129,6 +132,16 @@ npm run tauri:build    # bundled desktop build
 Rendered fixtures cover empty projects, plain clips, keyframed scale, animated
 opacity (verified monotonic via luma sampling), text overlays, audio-only
 timelines and the full demo project (1920x1080 / 60 fps / H.264 + AAC, 24 s).
+
+## Known limits
+
+- Monitor playback depends on the platform webview codecs (WebKitGTK +
+  GStreamer on Linux); unsupported files fall back to a labelled placeholder.
+- Transitions and effect stacks are compiled into the export graph but are not
+  yet reflected in the monitor.
+- Timeline waveforms are synthesized; real peak extraction from decoded audio
+  is not wired yet.
+- No packaged installer or CI has been produced for this revision.
 
 ## License
 
