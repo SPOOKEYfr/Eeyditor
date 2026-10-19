@@ -19,7 +19,11 @@ import {
   drawVignette,
 } from "../../core/effects/canvas";
 import { clipEnd, formatTimecode, secondsToFrames } from "../../core/timeline/engine";
-import { transitionOpacityFactor } from "../../core/timeline/transitions";
+import {
+  slideOffset,
+  transitionOpacityFactor,
+  wipeRect,
+} from "../../core/timeline/transitions";
 import { convertMediaUrl } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
 import type { MediaSource, TimelineClip, TimelineTrack } from "../../types/timeline";
@@ -169,10 +173,24 @@ function drawMediaClip(
   const drawH = sourceH * fit * scaleY;
   const fx = canvasEffectPlan(clip.effects);
   const key = chromaKeyStrength(clip.effects);
+  const wipe = wipeRect(clip, local, rect);
+  const slide = slideOffset(clip, local, rect);
 
   ctx.save();
+  if (wipe === null) {
+    ctx.restore();
+    return true;
+  }
+  if (wipe) {
+    ctx.beginPath();
+    ctx.rect(wipe.x, wipe.y, wipe.w, wipe.h);
+    ctx.clip();
+  }
   ctx.globalAlpha = clamp01(opacity);
-  ctx.translate(rect.x + rect.w * (0.5 + posX), rect.y + rect.h * (0.5 + posY));
+  ctx.translate(
+    rect.x + rect.w * (0.5 + posX) + slide.dx,
+    rect.y + rect.h * (0.5 + posY) + slide.dy,
+  );
   ctx.rotate((rotation * Math.PI) / 180);
 
   const scratch = key > 0 ? chromaKeyScratch(Math.abs(drawW), Math.abs(drawH)) : null;

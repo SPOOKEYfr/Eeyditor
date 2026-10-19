@@ -11,6 +11,7 @@ import { evaluateCurve } from "../keyframes/bezier";
 import { clipEnd } from "../timeline/engine";
 import {
   hasTransition,
+  isFadeKind,
   transitionInDuration,
   transitionOutDuration,
 } from "../timeline/transitions";
@@ -266,7 +267,7 @@ export function buildFfmpegPlan(
           "-f",
           "lavfi",
           "-i",
-          `color=c=black:s=16x16:r=${f(fps)}:d=${f(Math.max(0.1, clip.duration))}`,
+          `color=c=black:s=128x72:r=${f(fps)}:d=${f(Math.max(0.1, clip.duration))}`,
         );
         entry.opacityMaskIndex = nextInput++;
       }
@@ -329,8 +330,9 @@ export function buildFfmpegPlan(
     chain.push("format=rgba");
     const opacityCurve = clip.transform.opacity;
     const transitionExpr = transitionExpression(clip);
+    const wipeExpr = wipeExpression(clip);
     const animatedOpacity =
-      (opacityCurve.keyframes.length > 0 || transitionExpr !== null) &&
+      (opacityCurve.keyframes.length > 0 || transitionExpr !== null || wipeExpr !== null) &&
       entry.opacityMaskIndex !== undefined;
     if (!animatedOpacity) {
       // colorchannelmixer only accepts a constant alpha; animated opacity uses
@@ -344,7 +346,10 @@ export function buildFfmpegPlan(
     const label = `vc${videoCounter++}`;
     if (animatedOpacity && entry.opacityMaskIndex !== undefined) {
       const base = piecewiseLinearExpression(opacityCurve, fps);
-      const combined = transitionExpr ? `min(1,max(0,(${base})*(${transitionExpr})))` : base;
+      const factors = [base, transitionExpr, wipeExpr].filter(
+        (part): part is string => Boolean(part),
+      );
+      const combined = `min(1,max(0,${factors.map((part) => `(${part})`).join("*")}))`;
       const exprT = combined.replace(/\bt\b/g, "T");
       const lum = escapeFilterGraph(`min(1,max(0,(${exprT})))*255`);
       filters.push(`${inputLabel}${chain.join(",")}[${label}m]`);
@@ -360,8 +365,9 @@ export function buildFfmpegPlan(
 
     const posX = staticOrExpression(clip.transform.positionX, fps);
     const posY = staticOrExpression(clip.transform.positionY, fps);
-    const xExpr = `(W*(0.5+(${posX}))-w*${f(clip.transform.anchorX)})`;
-    const yExpr = `(H*(0.5+(${posY}))-h*${f(clip.transform.anchorY)})`;
+    const slide = slideExpression(clip);
+    const xExpr = `(W*(0.5+(${posX}))-w*${f(clip.transform.anchorX)}${slide.x})`;
+    const yExpr = `(H*(0.5+(${posY}))-h*${f(clip.transform.anchorY)}${slide.y})`;
     const enable = `enable=${escapeFilterGraph(`between(t,${f(clip.start)},${f(clipEnd(clip))})`)}`;
     const next = `[v${videoCounter}]`;
     filters.push(
@@ -477,10 +483,89 @@ export function buildFfmpegPlan(
 function transitionExpression(clip: TimelineClip): string | null {
   const parts: string[] = [];
   const fadeIn = transitionInDuration(clip);
-  if (fadeIn > 0) parts.push(`min(1,max(0,t/${f(fadeIn)}))`);
+  if (fadeIn > 0 && isFadeKind(clip.transitionIn?.kind)) {
+    parts.push(`min(1,max(0,t/${f(fadeIn)}))`);
+  }
   const fadeOut = transitionOutDuration(clip);
-  if (fadeOut > 0) parts.push(`min(1,max(0,(${f(clip.duration)}-t)/${f(fadeOut)}))`);
+  if (fadeOut > 0 && isFadeKind(clip.transitionOut?.kind)) {
+    parts.push(`min(1,max(0,(${f(clip.duration)}-t)/${f(fadeOut)}))`);
+  }
   return parts.length > 0 ? parts.join("*") : null;
+}
+
+/** Spatial wipe mask in clip-local `t`, evaluated on the 128x72 mask proxy. */
+function wipeExpression(clip: TimelineClip): string | null {
+  const feather = 0.04;
+  const coordinate = (direction: "left" | "right" | "up" | "down"): string => {
+    switch (direction) {
+      case "right":
+        return "(1-X/W)";
+      case "up":
+        return "(Y/H)";
+      case "down":
+        return "(1-Y/H)";
+      case "left":
+      default:
+        return "(X/W)";
+    }
+  };
+  const parts: string[] = [];
+  const inDuration = transitionInDuration(clip);
+  if (clip.transitionIn?.kind === "wipe" && inDuration > 0) {
+    const progress = `min(1,max(0,t/${f(inDuration)}))`;
+    parts.push(
+      `min(1,max(0,((${progress})-${coordinate(clip.transitionIn.direction)})/${feather}))`,
+    );
+  }
+  const outDuration = transitionOutDuration(clip);
+  if (clip.transitionOut?.kind === "wipe" && outDuration > 0) {
+    const progress = `min(1,max(0,(t-${f(clip.duration - outDuration)})/${f(outDuration)}))`;
+    parts.push(
+      `min(1,max(0,((1-(${progress}))-${coordinate(clip.transitionOut.direction)})/${feather}))`,
+    );
+  }
+  return parts.length > 0 ? parts.join("*") : null;
+}
+
+/** Overlay offsets (fractions of the main frame) for slide transitions. */
+function slideExpression(clip: TimelineClip): { x: string; y: string } {
+  const x: string[] = [];
+  const y: string[] = [];
+  const append = (direction: "left" | "right" | "up" | "down", offscreen: string): void => {
+    const magnitude = `(${offscreen})`;
+    switch (direction) {
+      case "left":
+        x.push(`-W*${magnitude}`);
+        break;
+      case "right":
+        x.push(`W*${magnitude}`);
+        break;
+      case "up":
+        y.push(`-H*${magnitude}`);
+        break;
+      case "down":
+        y.push(`H*${magnitude}`);
+        break;
+    }
+  };
+  const inDuration = transitionInDuration(clip);
+  if (clip.transitionIn?.kind === "slide" && inDuration > 0) {
+    append(
+      clip.transitionIn.direction,
+      `min(1,max(0,1-(t-${f(clip.start)})/${f(inDuration)}))`,
+    );
+  }
+  const outDuration = transitionOutDuration(clip);
+  if (clip.transitionOut?.kind === "slide" && outDuration > 0) {
+    append(
+      clip.transitionOut.direction,
+      `min(1,max(0,(t-${f(clip.start + clip.duration - outDuration)})/${f(outDuration)}))`,
+    );
+  }
+  return {
+    x: x.map((part) => `+${part}`).join(""),
+    y: y.map((part) => `+${part}`).join(""),
+  };
 }
 
 function effectFilter(kind: string, amount: number): string {

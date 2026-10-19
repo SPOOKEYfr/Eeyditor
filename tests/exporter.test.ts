@@ -33,6 +33,24 @@ describe("ffmpeg export pipeline", () => {
     expect(plan.audioLabel).toBe("aout");
   });
 
+  it("emits wipe masks and slide offsets instead of a plain fade", () => {
+    const project = createEmptyProject();
+    const track = project.tracks.find((entry) => entry.type === "video");
+    if (!track) throw new Error("missing video track");
+    const clip = createClip({ trackId: track.id, start: 0, duration: 4, kind: "video" });
+    clip.transitionIn = { id: "t", kind: "wipe", duration: 1, direction: "left" };
+    track.clips = [clip];
+    const wipePlan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(wipePlan.args.join(" ")).toContain("128x72");
+    expect(wipePlan.filterComplex).toContain("alphamerge");
+    expect(wipePlan.filterComplex).toContain("X/W");
+
+    clip.transitionIn = { id: "t2", kind: "slide", duration: 1, direction: "right" };
+    const slidePlan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(slidePlan.filterComplex).toContain("+W*");
+    expect(slidePlan.filterComplex).toContain("1-(t-");
+  });
+
   it("burns subtitle cues as timed drawtext overlays", () => {
     const project = createEmptyProject();
     project.subtitles = [{ id: "cue", start: 1, end: 2.5, text: "Hello, world" }];
