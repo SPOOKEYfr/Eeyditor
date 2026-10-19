@@ -9,6 +9,11 @@ import type {
 } from "../../types/timeline";
 import { evaluateCurve } from "../keyframes/bezier";
 import { clipEnd } from "../timeline/engine";
+import {
+  hasTransition,
+  transitionInDuration,
+  transitionOutDuration,
+} from "../timeline/transitions";
 
 export interface FfmpegPlan {
   /** Full ffmpeg argument vector, excluding the `ffmpeg` binary itself. */
@@ -253,7 +258,10 @@ export function buildFfmpegPlan(
         if (source.hasAudio) entry.audioIndex = index;
       }
 
-      if (entry.videoIndex !== undefined && clip.transform.opacity.keyframes.length > 0) {
+      if (
+        entry.videoIndex !== undefined &&
+        (clip.transform.opacity.keyframes.length > 0 || hasTransition(clip))
+      ) {
         inputs.push(
           "-f",
           "lavfi",
@@ -315,8 +323,10 @@ export function buildFfmpegPlan(
 
     chain.push("format=rgba");
     const opacityCurve = clip.transform.opacity;
+    const transitionExpr = transitionExpression(clip);
     const animatedOpacity =
-      opacityCurve.keyframes.length > 0 && entry.opacityMaskIndex !== undefined;
+      (opacityCurve.keyframes.length > 0 || transitionExpr !== null) &&
+      entry.opacityMaskIndex !== undefined;
     if (!animatedOpacity) {
       // colorchannelmixer only accepts a constant alpha; animated opacity uses
       // a bounded-size luma mask (below) so the per-pixel cost stays constant.
@@ -328,7 +338,9 @@ export function buildFfmpegPlan(
 
     const label = `vc${videoCounter++}`;
     if (animatedOpacity && entry.opacityMaskIndex !== undefined) {
-      const exprT = piecewiseLinearExpression(opacityCurve, fps).replace(/\bt\b/g, "T");
+      const base = piecewiseLinearExpression(opacityCurve, fps);
+      const combined = transitionExpr ? `min(1,max(0,(${base})*(${transitionExpr})))` : base;
+      const exprT = combined.replace(/\bt\b/g, "T");
       const lum = escapeFilterGraph(`min(1,max(0,(${exprT})))*255`);
       filters.push(`${inputLabel}${chain.join(",")}[${label}m]`);
       filters.push(
@@ -382,6 +394,15 @@ export function buildFfmpegPlan(
       const start = Math.max(0, clip.duration - clip.volume.fadeOut);
       chain.push(`afade=t=out:st=${f(start)}:d=${f(clip.volume.fadeOut)}`);
     }
+    const audioFadeIn = transitionInDuration(clip);
+    if (audioFadeIn > 0) {
+      chain.push(`afade=t=in:st=0:d=${f(audioFadeIn)}`);
+    }
+    const audioFadeOut = transitionOutDuration(clip);
+    if (audioFadeOut > 0) {
+      const start = Math.max(0, clip.duration - audioFadeOut);
+      chain.push(`afade=t=out:st=${f(start)}:d=${f(audioFadeOut)}`);
+    }
     if (clip.start > 0) {
       const delayMs = Math.round(clip.start * 1000);
       chain.push(`adelay=${delayMs}|${delayMs}`);
@@ -422,6 +443,16 @@ export function buildFfmpegPlan(
     audioLabel,
     duration,
   };
+}
+
+/** Edge-transition opacity ramp in terms of clip-local `t`, or null. */
+function transitionExpression(clip: TimelineClip): string | null {
+  const parts: string[] = [];
+  const fadeIn = transitionInDuration(clip);
+  if (fadeIn > 0) parts.push(`min(1,max(0,t/${f(fadeIn)}))`);
+  const fadeOut = transitionOutDuration(clip);
+  if (fadeOut > 0) parts.push(`min(1,max(0,(${f(clip.duration)}-t)/${f(fadeOut)}))`);
+  return parts.length > 0 ? parts.join("*") : null;
 }
 
 function effectFilter(kind: string, amount: number): string {

@@ -9,6 +9,7 @@ import {
   createClip,
   createDemoProject,
   createEmptyProject,
+  createMediaSource,
   RENDER_PRESETS,
 } from "../src/core/project/factory";
 import type { KeyframeCurve } from "../src/types/timeline";
@@ -87,6 +88,36 @@ describe("ffmpeg export pipeline", () => {
     );
     const depth = expression.split("if(").length - 1;
     expect(depth).toBe(0);
+  });
+
+  it("compiles edge transitions into an alpha ramp and audio fades", () => {
+    const project = createEmptyProject();
+    const source = createMediaSource({
+      path: "generator://transition",
+      kind: "generator",
+      duration: 4,
+      hasVideo: true,
+      hasAudio: true,
+    });
+    project.media = [source];
+    const clip = createClip({
+      trackId: project.tracks[0].id,
+      sourceId: source.id,
+      start: 0,
+      duration: 4,
+      kind: "generator",
+    });
+    clip.transitionOut = {
+      id: "tout",
+      kind: "dissolve",
+      duration: 1,
+      direction: "left",
+    };
+    project.tracks[0].clips = [clip];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("alphamerge");
+    expect(plan.filterComplex).toContain("min(1\\,max(0\\,");
+    expect(plan.filterComplex).toContain("afade=t=out");
   });
 
   it("names the drawtext filter with '=' before its options", () => {

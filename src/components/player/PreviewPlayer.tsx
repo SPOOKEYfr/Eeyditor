@@ -13,6 +13,7 @@ import { evaluateCurve } from "../../core/keyframes/bezier";
 import { evaluateEnvelope } from "../../core/audio/waveform";
 import { canvasEffectPlan, drawVignette } from "../../core/effects/canvas";
 import { clipEnd, formatTimecode, secondsToFrames } from "../../core/timeline/engine";
+import { transitionOpacityFactor } from "../../core/timeline/transitions";
 import { convertMediaUrl } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
 import type { MediaSource, TimelineClip, TimelineTrack } from "../../types/timeline";
@@ -108,7 +109,7 @@ function drawTextClip(
   const text = clip.text;
   if (!text) return;
   const local = playhead - clip.start;
-  const opacity = evaluateCurve(clip.transform.opacity, local);
+  const opacity = evaluateCurve(clip.transform.opacity, local) * transitionOpacityFactor(clip, local);
   if (opacity <= 0.001) return;
   const scaleX = evaluateCurve(clip.transform.scaleX, local);
   const scaleY = evaluateCurve(clip.transform.scaleY, local);
@@ -150,7 +151,7 @@ function drawMediaClip(
   const sourceH = frameHeight(element);
   if (sourceW <= 0 || sourceH <= 0) return false;
   const local = playhead - clip.start;
-  const opacity = evaluateCurve(clip.transform.opacity, local);
+  const opacity = evaluateCurve(clip.transform.opacity, local) * transitionOpacityFactor(clip, local);
   if (opacity <= 0.001) return true;
   const scaleX = evaluateCurve(clip.transform.scaleX, local);
   const scaleY = evaluateCurve(clip.transform.scaleY, local);
@@ -193,7 +194,7 @@ function drawPlaceholder(
   rect: FrameRect,
 ): void {
   const local = playhead - clip.start;
-  const opacity = evaluateCurve(clip.transform.opacity, local);
+  const opacity = evaluateCurve(clip.transform.opacity, local) * transitionOpacityFactor(clip, local);
   if (opacity <= 0.001) return;
   const scaleX = evaluateCurve(clip.transform.scaleX, local);
   const scaleY = evaluateCurve(clip.transform.scaleY, local);
@@ -280,7 +281,9 @@ function syncPlayable(
     }
   }
 
-  const gain = audible ? evaluateEnvelope(clip.volume, local, clip.duration) : 0;
+  const gain = audible
+    ? evaluateEnvelope(clip.volume, local, clip.duration) * transitionOpacityFactor(clip, local)
+    : 0;
   element.volume = clamp01(gain);
   element.muted = !audible;
   void track;
