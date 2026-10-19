@@ -14,7 +14,7 @@ export function ExportPanel() {
   const [busy, setBusy] = useState(false);
   const [filterPreview, setFilterPreview] = useState<string | null>(null);
 
-  const plan = buildFfmpegPlan(project, outputPath);
+  const previewPlan = buildFfmpegPlan(project, outputPath);
 
   const setPreset = (id: string) => {
     const preset = RENDER_PRESETS.find((entry) => entry.id === id);
@@ -24,10 +24,19 @@ export function ExportPanel() {
 
   const handleExport = async () => {
     setBusy(true);
+    let target = outputPath;
+    if (isTauri()) {
+      const chosen = await pickSavePath(outputPath, "mp4");
+      if (!chosen) {
+        editorStore.setStatus("Export cancelled");
+        setBusy(false);
+        return;
+      }
+      target = chosen;
+      setOutputPath(chosen);
+    }
+    const plan = buildFfmpegPlan(project, target);
     setFilterPreview(plan.filterComplex);
-    const target = isTauri()
-      ? (await pickSavePath(outputPath, "mp4")) ?? outputPath
-      : outputPath;
     const result = await invokeSafe<{ success: boolean; code: number | null; stderr: string }>(
       "run_ffmpeg",
       { args: plan.args },
@@ -108,7 +117,7 @@ export function ExportPanel() {
         </div>
         <div className="flex items-center justify-between text-[10px] text-muted">
           <span className="truncate">{status}</span>
-          <span className="font-mono">{plan.args.length} args</span>
+          <span className="font-mono">{previewPlan.args.length} args</span>
         </div>
         {filterPreview && (
           <pre className="max-h-24 overflow-auto rounded-lg bg-recessed p-2 font-mono text-[9px] leading-tight text-muted shadow-recessed-sm">
