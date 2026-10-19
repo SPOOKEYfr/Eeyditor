@@ -1,55 +1,79 @@
-# Eeyditor
+<p align="center">
+  <img src="src/assets/logo.png" alt="Eeyditor logo" width="180" />
+</p>
 
-A fast, precise desktop video editor built for frame-accurate editing,
-multi-track compositing and deterministic FFmpeg rendering.
+<h1 align="center">Eeyditor</h1>
+
+<p align="center">
+  <em>A fast, precise desktop video editor — frame-accurate trimming, a canvas
+  timeline, a Bézier keyframe engine and deterministic FFmpeg rendering.</em>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img alt="License: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-blue.svg" /></a>
+  <img alt="Platforms" src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-4b5563.svg" />
+  <img alt="Tauri 2" src="https://img.shields.io/badge/Tauri-2-24C8DB.svg" />
+  <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
+  <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
+  <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-47%20passing-brightgreen.svg" />
+</p>
 
 Eeyditor is original software released under the **GNU General Public License
-v3.0**. It ships a Rust/Tauri shell, a React + TypeScript editing surface, a
-canvas-rendered 60fps timeline, a WebAudio-synced program monitor and a
-filtergraph compiler that turns a project manifest into a single `ffmpeg`
+v3.0**. It pairs a Rust/Tauri host with a React + TypeScript editing surface: a
+canvas-rendered 60 fps timeline, a real-media program monitor, and a filtergraph
+compiler that turns a `.eeyproj` manifest into a single, reproducible `ffmpeg`
 invocation.
 
-```
-Eeyditor logo (src/assets/logo.png)
-```
+## Status
 
-## Highlights
+Eeyditor is an **early, working build** — a solid vertical slice, not yet a
+production-complete editor. The editing core, project format, monitor and render
+pipeline are functional and tested; several editor conventions are still stubbed
+or missing (see [Known limits](#known-limits)).
 
-- **Canvas timeline** rendered at 60fps with infinite zoom, magnetic snapping
+| Area | State |
+| ---- | ----- |
+| Project schema, save/load, undo/redo | ✅ working |
+| Canvas timeline (trim, move, blade, ripple, snap, zoom) | ✅ working |
+| Bézier keyframe engine + curve editor | ✅ working |
+| Media import with real ffprobe metadata | ✅ working |
+| Program monitor with real video/image/audio playback | ✅ working (codec-dependent) |
+| Deterministic FFmpeg export (verified end-to-end) | ✅ working |
+| Transitions in monitor/export | 🚧 schema only |
+| Effects in monitor | 🚧 export-only |
+| Real timeline waveforms, mixer UI, subtitles | ❌ not yet |
+| Packaged installers, CI, auto-update | ❌ not yet |
+
+## Features
+
+- **Canvas timeline** rendered at 60 fps with infinite zoom, magnetic snapping
   (snap-to-cut, snap-to-edge, snap-to-marker), frame-accurate `HH:MM:SS:FF`
   timecode and virtualized clip drawing.
 - **Keyframe engine** with linear, hold and cubic Bézier interpolation, an
-  interactive Bézier curve editor and per-property animation for opacity,
-  scale, position, rotation and volume.
-- **Real-time program monitor** that decodes imported video/image media through
-  Tauri's asset protocol, composites frames with the same transform matrix used
-  by the export pipeline, plays real audio (per-clip gain and fades) and draws a
-  live analyser scope.
+  interactive Bézier curve editor and per-property animation for opacity, scale,
+  position, rotation and volume.
+- **Real-media program monitor** that decodes imported video and images through
+  Tauri's asset protocol, composites frames with the same transform matrix as the
+  export pipeline, plays real audio (per-clip gain and fades) and draws a live
+  analyser scope.
 - **Deterministic export** that compiles the timeline into one FFmpeg
-  `filter_complex` graph (multi-track overlay, keyframed transforms, audio
-  mixing, fades, transitions) and renders through the Rust host.
+  `filter_complex` graph — generated background, scaled/padded/rotated overlays,
+  keyframed transforms, animated opacity and audio mixing — then renders through
+  the Rust host.
 - **Tactile dark neumorphism** design system with a sampled brand gradient.
 
-## Design system
+## Stack
 
-Brand gradient:
-
-```css
-linear-gradient(135deg, #FFB300 0%, #FF5100 50%, #E60067 100%)
-```
-
-| Token         | Value     |
-| ------------- | --------- |
-| Canvas        | `#121318` |
-| Elevated      | `#1A1B23` |
-| Recessed      | `#16171F` |
-| Neon Amber    | `#FFB300` |
-| Magma Orange  | `#FF5100` |
-| Electric Pink | `#E60067` |
-
-The `NeumorphicButton`, `NeumorphicPanel`, `NeumorphicTrackSlot`,
-`NeumorphicKnob` and `NeumorphicSlider` components implement the raised and
-recessed illumination model.
+| Layer | Technology |
+| ----- | ---------- |
+| Shell | Tauri 2 (Rust) |
+| UI | React 18 + TypeScript 5 |
+| Styling | Tailwind CSS |
+| Icons | Lucide |
+| Build | Vite |
+| Tests | Vitest |
+| Rendering | FFmpeg / ffprobe |
 
 ## Architecture
 
@@ -76,7 +100,28 @@ src-tauri/                   Rust host: save/load, ffmpeg, ffprobe
 tests/                       Vitest suites (schema, keyframes, timeline, export, probe)
 ```
 
-### Project format
+## Design system
+
+Brand gradient:
+
+```css
+linear-gradient(135deg, #FFB300 0%, #FF5100 50%, #E60067 100%)
+```
+
+| Token         | Value     |
+| ------------- | --------- |
+| Canvas        | `#121318` |
+| Elevated      | `#1A1B23` |
+| Recessed      | `#16171F` |
+| Neon Amber    | `#FFB300` |
+| Magma Orange  | `#FF5100` |
+| Electric Pink | `#E60067` |
+
+The `NeumorphicButton`, `NeumorphicPanel`, `NeumorphicTrackSlot`,
+`NeumorphicKnob` and `NeumorphicSlider` components implement the raised and
+recessed illumination model.
+
+## Project format
 
 Projects serialize to `.eeyproj`, a JSON manifest. The schema validates and
 normalizes on load and round-trips deterministically:
@@ -93,7 +138,7 @@ EeyditorProject
 ├─ markers, renderPreset, metadata
 ```
 
-### Export pipeline
+## Export pipeline
 
 `buildFfmpegPlan(project, output)` produces:
 
@@ -104,10 +149,14 @@ EeyditorProject
 4. audio `atrim`/`atempo`/`volume`/`afade`/`adelay` chains mixed with `amix`;
 5. codec arguments for CPU (CRF) or hardware (NVENC) presets.
 
-## Development
+Animated opacity is compiled to a bounded luma mask combined with `alphamerge`,
+which keeps the per-frame cost constant regardless of keyframe density.
 
-Requires Node 20+/22+, Rust (stable) and the Tauri system libraries
-(`webkit2gtk-4.1`, `gtk+-3.0`, `libsoup-3.0`).
+## Getting started
+
+Prerequisites: **Node 20+** (or 22+), **Rust** (stable) and FFmpeg on `PATH`.
+Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
+`libsoup-3.0`).
 
 ```bash
 npm install
@@ -131,7 +180,20 @@ npm run tauri:build    # bundled desktop build
 
 Rendered fixtures cover empty projects, plain clips, keyframed scale, animated
 opacity (verified monotonic via luma sampling), text overlays, audio-only
-timelines and the full demo project (1920x1080 / 60 fps / H.264 + AAC, 24 s).
+timelines and the full demo project (1920×1080 / 60 fps / H.264 + AAC, 24 s).
+
+## Roadmap
+
+- [x] Project schema, serialization and undo/redo
+- [x] Canvas timeline with snapping and frame-accurate edits
+- [x] Bézier keyframe engine and curve editor
+- [x] Deterministic FFmpeg export pipeline
+- [x] Real media probing, monitor playback and audio
+- [ ] Transition rendering in monitor and export
+- [ ] Effects parity between monitor and export
+- [ ] Real timeline waveforms and a track mixer
+- [ ] Multi-select, copy/paste and linked A/V
+- [ ] Packaged installers, CI and auto-update
 
 ## Known limits
 
@@ -139,10 +201,16 @@ timelines and the full demo project (1920x1080 / 60 fps / H.264 + AAC, 24 s).
   GStreamer on Linux); unsupported files fall back to a labelled placeholder.
 - Transitions and effect stacks are compiled into the export graph but are not
   yet reflected in the monitor.
-- Timeline waveforms are synthesized; real peak extraction from decoded audio
-  is not wired yet.
+- Timeline waveforms are synthesized; real peak extraction from decoded audio is
+  not wired yet.
 - No packaged installer or CI has been produced for this revision.
+
+## Contributing
+
+Issues and pull requests are welcome. Please run `npm run typecheck` and
+`npm run test` before opening a PR, keep commits in Conventional Commit form
+(`feat:`, `fix:`, `docs:`) and match the surrounding code style.
 
 ## License
 
-GNU General Public License v3.0. See [`LICENSE`](./LICENSE).
+GNU General Public License v3.0 — see [`LICENSE`](LICENSE).
