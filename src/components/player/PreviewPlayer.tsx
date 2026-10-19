@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { evaluateCurve } from "../../core/keyframes/bezier";
-import { evaluateEnvelope } from "../../core/audio/waveform";
+import { dbToGain, evaluateEnvelope } from "../../core/audio/waveform";
 import { canvasEffectPlan, drawVignette } from "../../core/effects/canvas";
 import { clipEnd, formatTimecode, secondsToFrames } from "../../core/timeline/engine";
 import { transitionOpacityFactor } from "../../core/timeline/transitions";
@@ -282,7 +282,9 @@ function syncPlayable(
   }
 
   const gain = audible
-    ? evaluateEnvelope(clip.volume, local, clip.duration) * transitionOpacityFactor(clip, local)
+    ? evaluateEnvelope(clip.volume, local, clip.duration) *
+      transitionOpacityFactor(clip, local) *
+      dbToGain(track.volume)
     : 0;
   element.volume = clamp01(gain);
   element.muted = !audible;

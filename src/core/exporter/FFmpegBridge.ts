@@ -275,12 +275,17 @@ export function buildFfmpegPlan(
     }
   }
 
+  const hasSolo = project.tracks.some((track) => track.solo);
+  const audibleTrack = (track: TimelineTrack): boolean =>
+    !track.muted && (hasSolo ? track.solo : true);
+
   let videoCursor = "[base]";
   filters.push(`[0:v]setsar=1[base]`);
   let videoCounter = 0;
 
   for (const entry of clipInputs) {
     if (entry.videoIndex === undefined) continue;
+    if (entry.track.hidden) continue;
     const { clip } = entry;
     const chain: string[] = [];
     const inputLabel = `[${entry.videoIndex}:v]`;
@@ -371,6 +376,7 @@ export function buildFfmpegPlan(
   let audioCounter = 0;
   for (const entry of clipInputs) {
     if (entry.audioIndex === undefined) continue;
+    if (!audibleTrack(entry.track)) continue;
     const { clip } = entry;
     const chain: string[] = [];
     chain.push(
@@ -379,6 +385,7 @@ export function buildFfmpegPlan(
     chain.push("asetpts=PTS-STARTPTS");
     const tempo = atempoChain(clip.speed);
     if (tempo) chain.push(tempo);
+    if (entry.track.volume !== 0) chain.push(`volume=${f(entry.track.volume)}dB`);
     if (clip.volume.gainDb !== 0) chain.push(`volume=${f(clip.volume.gainDb)}dB`);
     if (clip.volume.keyframes.length) {
       const volumeExpr = piecewiseLinearExpression(

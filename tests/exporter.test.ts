@@ -90,6 +90,44 @@ describe("ffmpeg export pipeline", () => {
     expect(depth).toBe(0);
   });
 
+  it("drops audio from muted tracks and applies track gain", () => {
+    const project = createEmptyProject();
+    const source = createMediaSource({
+      path: "generator://bed",
+      kind: "generator",
+      duration: 4,
+      hasVideo: false,
+      hasAudio: true,
+    });
+    project.media = [source];
+    project.tracks[3].clips = [
+      createClip({
+        trackId: project.tracks[3].id,
+        sourceId: source.id,
+        start: 0,
+        duration: 4,
+        kind: "generator",
+      }),
+    ];
+
+    project.tracks[3].muted = true;
+    expect(buildFfmpegPlan(project, "/tmp/out.mp4").audioLabel).toBeNull();
+
+    project.tracks[3].muted = false;
+    project.tracks[3].volume = -6;
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.audioLabel).toBe("aout");
+    expect(plan.filterComplex).toContain("volume=-6dB");
+  });
+
+  it("skips hidden video tracks", () => {
+    const project = createDemoProject();
+    const before = buildFfmpegPlan(project, "/tmp/out.mp4").filterComplex;
+    project.tracks[0].hidden = true;
+    const after = buildFfmpegPlan(project, "/tmp/out.mp4").filterComplex;
+    expect(after.split(";").length).toBeLessThan(before.split(";").length);
+  });
+
   it("compiles edge transitions into an alpha ramp and audio fades", () => {
     const project = createEmptyProject();
     const source = createMediaSource({

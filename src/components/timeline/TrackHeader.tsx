@@ -1,6 +1,7 @@
 import {
   Eye,
   EyeOff,
+  Headphones,
   Lock,
   LockOpen,
   Volume2,
@@ -35,27 +36,39 @@ export function TrackHeader({ track, selected, height }: TrackHeaderProps) {
     }), "Updated track", false);
   };
 
+  const showVolume =
+    track.type === "audio" || track.type === "video" || track.type === "overlay";
+
   return (
     <div
       className={cn(
-        "group flex items-center gap-2 border-b border-black/40 px-2",
+        "flex flex-col justify-center gap-1 border-b border-black/40 px-2",
         selected ? "bg-surface" : "bg-[#15161d]",
       )}
       style={{ height }}
       onClick={() => editorStore.selectTrack(track.id)}
     >
-      <span
-        className="h-6 w-1 rounded-full"
-        style={{ background: TYPE_ACCENT[track.type] }}
-      />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-xs font-medium text-ink">{track.name}</div>
-        <div className="text-[10px] uppercase tracking-wider text-muted">
-          {track.type}
+      <div className="flex items-center gap-2">
+        <span
+          className="h-6 w-1 rounded-full"
+          style={{ background: TYPE_ACCENT[track.type] }}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-medium text-ink">{track.name}</div>
+          <div className="text-[10px] uppercase tracking-wider text-muted">
+            {track.type}
+          </div>
         </div>
-      </div>
-      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        {track.type === "audio" ? (
+        <div className="flex items-center gap-0.5">
+          {track.type !== "audio" && (
+            <IconToggle
+              active={track.hidden}
+              title="Hide"
+              onClick={() => toggle((t) => ({ ...t, hidden: !t.hidden }))}
+              on={<EyeOff size={13} />}
+              off={<Eye size={13} />}
+            />
+          )}
           <IconToggle
             active={track.muted}
             title="Mute"
@@ -63,23 +76,43 @@ export function TrackHeader({ track, selected, height }: TrackHeaderProps) {
             on={<VolumeX size={13} />}
             off={<Volume2 size={13} />}
           />
-        ) : (
           <IconToggle
-            active={track.hidden}
-            title="Hide"
-            onClick={() => toggle((t) => ({ ...t, hidden: !t.hidden }))}
-            on={<EyeOff size={13} />}
-            off={<Eye size={13} />}
+            active={track.solo}
+            title="Solo"
+            onClick={() => toggle((t) => ({ ...t, solo: !t.solo }))}
+            on={<Headphones size={13} />}
+            off={<Headphones size={13} />}
           />
-        )}
-        <IconToggle
-          active={track.locked}
-          title="Lock"
-          onClick={() => toggle((t) => ({ ...t, locked: !t.locked }))}
-          on={<Lock size={13} />}
-          off={<LockOpen size={13} />}
-        />
+          <IconToggle
+            active={track.locked}
+            title="Lock"
+            onClick={() => toggle((t) => ({ ...t, locked: !t.locked }))}
+            on={<Lock size={13} />}
+            off={<LockOpen size={13} />}
+          />
+        </div>
       </div>
+      {showVolume && (
+        <div className="flex items-center gap-1.5">
+          <input
+            type="range"
+            min={-60}
+            max={12}
+            step={0.5}
+            value={track.volume}
+            title={`Volume ${track.volume.toFixed(1)} dB`}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) =>
+              toggle((t) => ({ ...t, volume: Number(event.target.value) }))
+            }
+            className="h-1 flex-1 cursor-pointer appearance-none rounded-full bg-recessed"
+            style={{ accentColor: TYPE_ACCENT[track.type] }}
+          />
+          <span className="w-9 text-right font-mono text-[9px] text-muted">
+            {track.volume.toFixed(1)}dB
+          </span>
+        </div>
+      )}
     </div>
   );
 }
