@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #121318;
+  font-family: Inter, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+::selection {
+  background: rgba(255, 81, 0, 0.4);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #16171f;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #262734;
+  border-radius: 999px;
+  border: 2px solid #16171f;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #34364a;
+}
+
+@layer utilities {
+  .tactile-inset {
+    box-shadow: inset 3px 3px 6px #0c0d10, inset -3px -3px 6px #222330;
+  }
+  .tactile-raised {
+    box-shadow: 4px 4px 8px #0c0d10, -4px -4px 8px #262734;
+  }
+}
