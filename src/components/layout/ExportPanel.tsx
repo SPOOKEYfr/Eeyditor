@@ -1,10 +1,18 @@
-import { useState } from "react";
-import { Download, FolderOpen, Save } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, FolderOpen, Save, X } from "lucide-react";
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { RENDER_PRESETS } from "../../core/project/factory";
 import { parseProject, serializeProject } from "../../core/project/serialize";
 import { buildFfmpegPlan } from "../../core/exporter/FFmpegBridge";
-import { invokeSafe, isTauri, pickOpenPaths, pickSavePath } from "../../lib/tauri";
+import {
+  cancelExport,
+  invokeSafe,
+  isTauri,
+  onExportProgress,
+  pickOpenPaths,
+  pickSavePath,
+  renderExport,
+} from "../../lib/tauri";
 import { NeumorphicButton, NeumorphicPanel } from "../neumorphic";
 
 export function ExportPanel() {
@@ -13,6 +21,21 @@ export function ExportPanel() {
   const [outputPath, setOutputPath] = useState("eeyditor-export.mp4");
   const [busy, setBusy] = useState(false);
   const [filterPreview, setFilterPreview] = useState<string | null>(null);
+  const [progress, setProgress] = useState<number | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let unsubscribe = () => {};
+    void onExportProgress((update) => setProgress(update.percent)).then((stop) => {
+      if (active) unsubscribe = stop;
+      else stop();
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
 
   const previewPlan = buildFfmpegPlan(project, outputPath);
 
@@ -37,18 +60,34 @@ export function ExportPanel() {
     }
     const plan = buildFfmpegPlan(project, target);
     setFilterPreview(plan.filterComplex);
-    const result = await invokeSafe<{ success: boolean; code: number | null; stderr: string }>(
-      "run_ffmpeg",
-      { args: plan.args },
-    );
-    if (result) {
-      editorStore.setStatus(result.success ? `Export complete: ${target}` : `Export failed (${result.code})`);
-      if (!result.success) console.error(result.stderr.slice(-2000));
-    } else {
+    if (!isTauri()) {
       await copyText(plan.filterComplex);
       editorStore.setStatus("Filtergraph copied to clipboard (desktop app required to render)");
+      setBusy(false);
+      return;
+    }
+    const id = `export-${Date.now()}`;
+    setJobId(id);
+    setProgress(0);
+    const result = await renderExport(id, project.duration, plan.args);
+    setJobId(null);
+    if (result?.success) {
+      setProgress(100);
+      editorStore.setStatus(`Export complete: ${target}`);
+    } else {
+      setProgress(null);
+      editorStore.setStatus(
+        result?.stderr === "Export cancelled"
+          ? "Export cancelled"
+          : `Export failed (${result?.code ?? "unknown"})`,
+      );
+      if (result && result.stderr !== "Export cancelled") console.error(result.stderr.slice(-2000));
     }
     setBusy(false);
+  };
+
+  const handleCancel = async () => {
+    if (jobId) await cancelExport(jobId);
   };
 
   const handleSave = async () => {
@@ -110,11 +149,22 @@ export function ExportPanel() {
         </label>
         <div className="flex gap-1.5">
           <NeumorphicButton size="sm" variant="primary" icon={<Download size={14} />} disabled={busy} onClick={handleExport} className="flex-1">
-            {busy ? "Rendering" : "Export"}
+            {busy ? `Rendering ${progress === null ? "" : `${Math.round(progress)}%`}` : "Export"}
           </NeumorphicButton>
+          {busy && (
+            <NeumorphicButton size="sm" iconOnly title="Cancel export" onClick={handleCancel} icon={<X size={14} />} />
+          )}
           <NeumorphicButton size="sm" iconOnly title="Save project" onClick={handleSave} icon={<Save size={14} />} />
           <NeumorphicButton size="sm" iconOnly title="Open project" onClick={handleOpen} icon={<FolderOpen size={14} />} />
         </div>
+        {busy && (
+          <div className="h-1.5 overflow-hidden rounded-full bg-recessed shadow-recessed-sm">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-amber via-magma to-magenta transition-[width] duration-200"
+              style={{ width: `${progress ?? 0}%` }}
+            />
+          </div>
+        )}
         <div className="flex items-center justify-between text-[10px] text-muted">
           <span className="truncate">{status}</span>
           <span className="font-mono">{previewPlan.args.length} args</span>

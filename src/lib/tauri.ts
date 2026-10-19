@@ -26,6 +26,47 @@ export async function invokeSafe<T>(
   }
 }
 
+export interface RenderResult {
+  success: boolean;
+  code: number | null;
+  stderr: string;
+}
+
+export interface ExportProgress {
+  jobId: string;
+  seconds: number;
+  percent: number;
+}
+
+/** Run ffmpeg with live progress streaming and cancellable job tracking. */
+export async function renderExport(
+  jobId: string,
+  duration: number,
+  args: string[],
+): Promise<RenderResult | null> {
+  return invokeSafe<RenderResult>("render_export", { jobId, duration, args });
+}
+
+export async function cancelExport(jobId: string): Promise<void> {
+  await invokeSafe("cancel_export", { jobId });
+}
+
+/** Subscribe to render progress. Returns an unsubscribe function. */
+export async function onExportProgress(
+  handler: (progress: ExportProgress) => void,
+): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  try {
+    const { listen } = await import("@tauri-apps/api/event");
+    return await listen<ExportProgress>("export-progress", (event) =>
+      handler(event.payload),
+    );
+  } catch (error) {
+    console.error("[eeyditor] progress listener failed", error);
+    return () => {};
+  }
+}
+
 const mediaUrlCache = new Map<string, string>();
 
 /**

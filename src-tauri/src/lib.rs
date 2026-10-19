@@ -1,13 +1,23 @@
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, State};
 
 #[derive(Serialize, Deserialize)]
 pub struct RenderResult {
     pub success: bool,
     pub code: Option<i32>,
     pub stderr: String,
+}
+
+#[derive(Default)]
+struct ExportState {
+    children: Mutex<HashMap<String, Child>>,
+    cancelled: Mutex<HashSet<String>>,
 }
 
 #[derive(Serialize)]
@@ -138,6 +148,107 @@ fn run_ffmpeg(args: Vec<String>) -> Result<RenderResult, String> {
     })
 }
 
+/// Run ffmpeg while streaming progress to the frontend and allowing cancel.
+/// `-progress pipe:1` emits machine-readable `out_time_ms=<us>` lines on
+/// stdout; the running child is tracked so `cancel_export` can kill it.
+#[tauri::command]
+fn render_export(
+    app: AppHandle,
+    state: State<ExportState>,
+    job_id: String,
+    duration: f64,
+    args: Vec<String>,
+) -> Result<RenderResult, String> {
+    let mut child = Command::new("ffmpeg")
+        .args(["-progress", "pipe:1", "-nostats"])
+        .args(&args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    let stdout = child.stdout.take();
+    state
+        .children
+        .lock()
+        .unwrap()
+        .insert(job_id.clone(), child);
+
+    let mut last_percent = -1f64;
+    if let Some(stdout) = stdout {
+        for line in BufReader::new(stdout).lines().flatten() {
+            if let Some(value) = line.strip_prefix("out_time_ms=") {
+                if let Ok(micros) = value.trim().parse::<f64>() {
+                    let seconds = micros / 1_000_000.0;
+                    let percent = if duration > 0.0 {
+                        (seconds / duration * 100.0).clamp(0.0, 100.0)
+                    } else {
+                        0.0
+                    };
+                    if percent - last_percent >= 0.5 {
+                        last_percent = percent;
+                        let _ = app.emit(
+                            "export-progress",
+                            serde_json::json!({
+                                "jobId": job_id,
+                                "seconds": seconds,
+                                "percent": percent,
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    // Poll instead of `wait()` so `cancel_export` can always take the lock and
+    // kill the process without deadlocking with the waiter.
+    let status = loop {
+        let mut children = state.children.lock().unwrap();
+        let Some(child) = children.get_mut(&job_id) else {
+            break None;
+        };
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) => {}
+            Err(error) => return Err(error.to_string()),
+        }
+        drop(children);
+        std::thread::sleep(std::time::Duration::from_millis(40));
+    };
+    let mut finished = state.children.lock().unwrap().remove(&job_id);
+    let stderr = finished
+        .as_mut()
+        .and_then(|child| child.stderr.take())
+        .map(|mut pipe| {
+            let mut buffer = String::new();
+            use std::io::Read;
+            let _ = pipe.read_to_string(&mut buffer);
+            buffer
+        })
+        .unwrap_or_default();
+
+    let cancelled = state.cancelled.lock().unwrap().remove(&job_id);
+
+    Ok(RenderResult {
+        success: status.map(|exit| exit.success()).unwrap_or(false) && !cancelled,
+        code: status.and_then(|exit| exit.code()),
+        stderr: if cancelled {
+            "Export cancelled".to_string()
+        } else {
+            stderr
+        },
+    })
+}
+
+#[tauri::command]
+fn cancel_export(state: State<ExportState>, job_id: String) {
+    state.cancelled.lock().unwrap().insert(job_id.clone());
+    if let Some(child) = state.children.lock().unwrap().get_mut(&job_id) {
+        let _ = child.kill();
+    }
+}
+
 #[tauri::command]
 fn probe_media(path: String) -> Result<String, String> {
     let output = Command::new("ffprobe")
@@ -164,11 +275,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(ExportState::default())
         .invoke_handler(tauri::generate_handler![
             save_project,
             load_project,
             ffmpeg_available,
             run_ffmpeg,
+            render_export,
+            cancel_export,
             probe_media,
             audio_peaks
         ])
