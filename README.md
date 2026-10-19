@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-63%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-72%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -40,12 +40,14 @@ or missing (see [Known limits](#known-limits)).
 | Media import with real ffprobe metadata | ✅ working |
 | Program monitor with real video/image/audio playback | ✅ working (codec-dependent) |
 | Deterministic FFmpeg export (verified end-to-end) | ✅ working |
-| Transitions in monitor and export | ✅ working (edge fades) |
-| Effect stack in monitor and export | ✅ working (core subset) |
+| Transitions in monitor and export | ✅ fade, dissolve, wipe, slide |
+| Effect stack in monitor and export | ✅ working (core subset, incl. chroma key) |
 | Real waveforms, track mixer, multi-select, clipboard | ✅ working |
+| Clip link groups (move/trim/split/delete together) | ✅ working |
+| SRT subtitle import, monitor overlay and burn-in | ✅ working |
 | CI (typecheck, tests, build, cargo check) | ✅ configured |
-| Subtitles, linked A/V, auto-update | ❌ not yet |
-| Packaged installers | ❌ not yet |
+| Release bundles on `v*` tags (draft) | ✅ configured |
+| Auto-update | ❌ not yet |
 
 ## Features
 
@@ -72,6 +74,12 @@ or missing (see [Known limits](#known-limits)).
   memory so project files stay small.
 - **Live export progress and cancellation** — the host streams FFmpeg's
   `-progress` output, and a running render can be cancelled from the export panel.
+- **Subtitles** — import SubRip (`.srt`), add cues at the playhead, preview them
+  in the monitor and burn them into the export with timed `drawtext`.
+- **Spatial transitions** — wipes and slides are geometric in both the monitor
+  and the render graph; fades and dissolves use an opacity ramp.
+- **Clip link groups** — link any selection so move, trim, split and delete stay
+  in sync across tracks.
 - **Tactile dark neumorphism** design system with a sampled brand gradient.
 
 ## Stack
@@ -172,7 +180,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (63 tests)
+npm run test           # Vitest (72 tests)
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
 npm run tauri:dev      # desktop app
@@ -184,15 +192,17 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 63 / 63 passed             |
+| `vitest run`         | 72 / 72 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
-| FFmpeg end-to-end    | 6 / 6 renders passed       |
+| FFmpeg end-to-end    | 11 / 11 renders passed     |
 | GitHub Actions CI    | web + Rust jobs            |
 
 Rendered fixtures cover empty projects, plain clips, keyframed scale, animated
 opacity (verified monotonic via luma sampling), text overlays, audio-only
-timelines and the full demo project (1920×1080 / 60 fps / H.264 + AAC, 24 s).
+timelines, wipes, slides, subtitle burn-in and the full demo project
+(1920×1080 / 60 fps / H.264 + AAC, 24 s). Wipe and slide geometry was verified
+by sampling per-column luma across the transition.
 
 ## Roadmap
 
@@ -206,21 +216,26 @@ timelines and the full demo project (1920×1080 / 60 fps / H.264 + AAC, 24 s).
 - [x] Real timeline waveforms and a track mixer
 - [x] Multi-select, group move and clipboard operations
 - [x] CI: typecheck, unit tests, web build and `cargo check`
-- [ ] Linked A/V groups and subtitles
-- [ ] Packaged installers and auto-update
+- [x] Clip link groups and SRT subtitles
+- [x] Tag-triggered release bundles for Linux, macOS and Windows
+- [ ] Auto-update and code signing
 
 ## Known limits
 
 - Monitor playback depends on the platform webview codecs (WebKitGTK +
   GStreamer on Linux); unsupported files fall back to a labelled placeholder.
-- The monitor applies blur, brightness, contrast, saturation, hue, glow and
-  vignette; sharpen, chroma-key and LUT effects remain export-only.
-- Transitions are edge fades/cross-dissolves; wipe and slide types are not yet
-  modelled.
+- The monitor applies blur, brightness, contrast, saturation, hue, glow,
+  vignette and chroma key; sharpen and LUT effects remain export-only (`lut` is
+  currently a no-op in both paths; no LUT file picker exists).
+- Zoom transitions currently render as fades rather than a spatial zoom.
+- Subtitle styling is fixed (white, bottom-centred, translucent box); there is no
+  per-cue font or position control yet.
+- Clip link groups are created manually; importing a file does not auto-split its
+  audio into a linked track.
 - Timeline waveforms require the desktop host to decode audio; browser-only
   development falls back to synthesized peaks.
-- Linked A/V groups, subtitles and auto-update are not implemented.
-- No packaged installer is produced for this revision; CI only checks the tree.
+- Release bundles are produced only when a `v*` tag is pushed; this revision
+  ships no binaries and has no auto-update or signing.
 
 ## Contributing
 
