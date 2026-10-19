@@ -29,27 +29,48 @@ function f(value: number): string {
   return String(rounded);
 }
 
+/**
+ * Escape a value so it survives a single pass through ffmpeg's filtergraph
+ * tokenizer. `:` separates options, `,` separates filters, `;` separates
+ * chains, `[`/`]` delimit labels and `'` toggles quoting; all of them must be
+ * backslash-escaped when they appear inside a filter argument value.
+ *
+ * Quoting is deliberately avoided: ffmpeg's graph parser strips a single quote
+ * and then consumes everything up to the next quote, which desyncs the parse
+ * when a value (or a later argument such as `enable`) also contains quotes.
+ */
+export function escapeFilterGraph(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/([:;,'\[\]])/g, "\\$1");
+}
+
 /** Escape a value for use inside a drawtext text parameter. */
 export function escapeDrawtext(text: string): string {
-  return text
-    .replace(/\\/g, "\\\\\\\\")
-    .replace(/:/g, "\\\\:")
-    .replace(/'/g, "\\\\'")
-    .replace(/%/g, "\\\\%")
+  return escapeFilterGraph(text)
+    .replace(/%/g, "\\%")
     .replace(/\n/g, "\\n");
 }
 
 /**
- * Build a piecewise-linear ffmpeg expression in terms of `t` for a keyframe
- * curve. Bezier segments are sampled to a tight linear approximation so the
- * filtergraph stays deterministic and evaluable per frame.
+ * Build a piecewise expression in terms of `t` for a keyframe curve.
+ *
+ * The expression is emitted as a flat sum of gate-weighted segments rather
+ * than a nested `if` chain: ffmpeg's expression parser caps nesting depth near
+ * ~90 levels, while a densely sampled bezier segment can require hundreds of
+ * steps. Both forms are mathematically identical; the flat form keeps parser
+ * depth constant regardless of sampling density.
+ *
+ * Gating uses half-open windows so exactly one segment is active at any `t`
+ * (piecewise-linear segments share endpoints, so the value is continuous).
  */
 export function piecewiseLinearExpression(curve: KeyframeCurve, fps: number): string {
   const keyframes = [...curve.keyframes].sort((a, b) => a.time - b.time);
   if (keyframes.length === 0) return f(curve.defaultValue);
   if (keyframes.length === 1) return f(keyframes[0].value);
 
-  const segments: string[] = [];
+  const terms: string[] = [`lt(t,${f(keyframes[0].time)})*${f(keyframes[0].value)}`];
+
   for (let i = 0; i < keyframes.length - 1; i += 1) {
     const a = keyframes[i];
     const b = keyframes[i + 1];
@@ -57,7 +78,9 @@ export function piecewiseLinearExpression(curve: KeyframeCurve, fps: number): st
     if (span <= 0) continue;
 
     if (a.interpolation === "hold") {
-      segments.push(`if(lt(t,${f(b.time)}),${f(a.value)},`);
+      terms.push(
+        `${f(a.value)}*gte(t,${f(a.time)})*lt(t,${f(b.time)})`,
+      );
       continue;
     }
 
@@ -66,20 +89,19 @@ export function piecewiseLinearExpression(curve: KeyframeCurve, fps: number): st
     for (let step = 0; step < steps; step += 1) {
       const t0 = a.time + (span * step) / steps;
       const t1 = a.time + (span * (step + 1)) / steps;
-      const v0 =
-        step === 0 ? a.value : evaluateCurve(curve, t0);
+      const v0 = step === 0 ? a.value : evaluateCurve(curve, t0);
       const v1 = step === steps - 1 ? b.value : evaluateCurve(curve, t1);
-      segments.push(`if(lt(t,${f(t1)}),${f(v0)}+${f(v1 - v0)}*(t-${f(t0)})/${f(t1 - t0)},`);
+      const slope = (v1 - v0) / (t1 - t0);
+      const gate = `gte(t,${f(t0)})*lt(t,${f(t1)})`;
+      terms.push(`(${f(v0)}+${f(slope)}*(t-${f(t0)}))*${gate}`);
     }
   }
 
   const last = keyframes[keyframes.length - 1];
-  let expression = `${f(last.value)}`;
-  for (let i = segments.length - 1; i >= 0; i -= 1) {
-    expression = `${segments[i]}${expression})`;
-  }
-  // Clamp before the first keyframe to its value.
-  return `if(lt(t,${f(keyframes[0].time)}),${f(keyframes[0].value)},${expression})`;
+  // Clamp to the final value for t at or beyond the last keyframe.
+  terms.push(`gte(t,${f(last.time)})*${f(last.value)}`);
+
+  return terms.join("+");
 }
 
 function staticOrExpression(curve: KeyframeCurve, fps: number): string {
@@ -107,8 +129,7 @@ function generatorVideoSource(preset: RenderPreset, duration: number, seed: numb
   const hues = ["0xFFB300", "0xFF5100", "0xE60067", "0x7C5CFF"];
   const c0 = hues[seed % hues.length];
   const c1 = hues[(seed + 1) % hues.length];
-  return [
-    "gradients",
+  const options = [
     `s=${preset.width}x${preset.height}`,
     `r=${preset.fps}`,
     `d=${f(Math.max(0.1, duration))}`,
@@ -118,7 +139,8 @@ function generatorVideoSource(preset: RenderPreset, duration: number, seed: numb
     "y0=0",
     `x1=${preset.width}`,
     `y1=${preset.height}`,
-  ].join(":");
+  ];
+  return `gradients=${options.join(":")}`;
 }
 
 function generatorAudioSource(duration: number, frequency = 220): string {
@@ -138,33 +160,29 @@ interface ClipInputs {
   track: TimelineTrack;
   videoIndex?: number;
   audioIndex?: number;
+  opacityMaskIndex?: number;
 }
 
 function buildDrawText(clip: TimelineClip): string {
   const text = clip.text;
   if (!text) return "null";
   const color = text.color.replace(/^#/, "0x");
-  const border =
-    text.strokeWidth > 0
-      ? `:borderw=${f(text.strokeWidth)}:bordercolor=${text.strokeColor.replace(/^#/, "0x")}`
-      : "";
-  const shadow =
-    text.shadowBlur > 0
-      ? `:shadowx=2:shadowy=2:shadowcolor=black@0.5`
-      : "";
-  return [
-    "drawtext",
-    `text='${escapeDrawtext(text.content)}'`,
+  const parts = [
+    `text=${escapeDrawtext(text.content)}`,
     `fontcolor=${color}`,
     `fontsize=${f(text.fontSize)}`,
     `line_spacing=${f(text.lineHeight * text.fontSize - text.fontSize)}`,
     "x=(w-text_w)/2",
     "y=(h-text_h)/2",
-    border,
-    shadow,
-  ]
-    .join(":")
-    .replace(/::/g, ":");
+  ];
+  if (text.strokeWidth > 0) {
+    parts.push(`borderw=${f(text.strokeWidth)}`);
+    parts.push(`bordercolor=${text.strokeColor.replace(/^#/, "0x")}`);
+  }
+  if (text.shadowBlur > 0) {
+    parts.push("shadowx=2", "shadowy=2", "shadowcolor=black@0.5");
+  }
+  return `drawtext=${parts.join(":")}`;
 }
 
 /**
@@ -235,6 +253,16 @@ export function buildFfmpegPlan(
         if (source.hasAudio) entry.audioIndex = index;
       }
 
+      if (entry.videoIndex !== undefined && clip.transform.opacity.keyframes.length > 0) {
+        inputs.push(
+          "-f",
+          "lavfi",
+          "-i",
+          `color=c=black:s=16x16:r=${f(fps)}:d=${f(Math.max(0.1, clip.duration))}`,
+        );
+        entry.opacityMaskIndex = nextInput++;
+      }
+
       clipInputs.push(entry);
     }
   }
@@ -268,14 +296,14 @@ export function buildFfmpegPlan(
       const sx = staticOrExpression(clip.transform.scaleX, fps);
       const sy = staticOrExpression(clip.transform.scaleY, fps);
       if (clip.transform.scaleX.keyframes.length || clip.transform.scaleY.keyframes.length) {
-        chain.push(`scale=iw*(${sx}):ih*(${sy}):eval=frame`);
+        chain.push(`scale=${escapeFilterGraph(`iw*(${sx})`)}:${escapeFilterGraph(`ih*(${sy})`)}:eval=frame`);
       } else if (clip.transform.scaleX.defaultValue !== 1 || clip.transform.scaleY.defaultValue !== 1) {
         chain.push(`scale=iw*${f(clip.transform.scaleX.defaultValue)}:ih*${f(clip.transform.scaleY.defaultValue)}`);
       }
       const rotation = staticOrExpression(clip.transform.rotation, fps);
       if (clip.transform.rotation.keyframes.length || clip.transform.rotation.defaultValue !== 0) {
         chain.push(
-          `rotate=${rotation}*PI/180:c=none:ow=rotw(iw):oh=roth(ih)`,
+          `rotate=${escapeFilterGraph(`${rotation}*PI/180`)}:c=none:ow=rotw(iw):oh=roth(ih)`,
         );
       }
       // Effects layers.
@@ -286,23 +314,41 @@ export function buildFfmpegPlan(
     }
 
     chain.push("format=rgba");
-    const opacity = staticOrExpression(clip.transform.opacity, fps);
-    if (clip.transform.opacity.keyframes.length || clip.transform.opacity.defaultValue !== 1) {
-      chain.push(`colorchannelmixer=aa=(${opacity})`);
+    const opacityCurve = clip.transform.opacity;
+    const animatedOpacity =
+      opacityCurve.keyframes.length > 0 && entry.opacityMaskIndex !== undefined;
+    if (!animatedOpacity) {
+      // colorchannelmixer only accepts a constant alpha; animated opacity uses
+      // a bounded-size luma mask (below) so the per-pixel cost stays constant.
+      if (opacityCurve.defaultValue !== 1) {
+        chain.push(`colorchannelmixer=aa=${f(opacityCurve.defaultValue)}`);
+      }
+      chain.push(`setpts=PTS+${f(clip.start)}/TB`);
     }
-    chain.push(`setpts=PTS+${f(clip.start)}/TB`);
 
     const label = `vc${videoCounter++}`;
-    filters.push(`${inputLabel}${chain.join(",")}[${label}]`);
+    if (animatedOpacity && entry.opacityMaskIndex !== undefined) {
+      const exprT = piecewiseLinearExpression(opacityCurve, fps).replace(/\bt\b/g, "T");
+      const lum = escapeFilterGraph(`min(1,max(0,(${exprT})))*255`);
+      filters.push(`${inputLabel}${chain.join(",")}[${label}m]`);
+      filters.push(
+        `[${entry.opacityMaskIndex}:v]format=gray,geq=lum=${lum},scale=${preset.width}:${preset.height}:flags=bilinear,format=gray[${label}k]`,
+      );
+      filters.push(
+        `[${label}m][${label}k]alphamerge,setpts=PTS+${f(clip.start)}/TB[${label}]`,
+      );
+    } else {
+      filters.push(`${inputLabel}${chain.join(",")}[${label}]`);
+    }
 
     const posX = staticOrExpression(clip.transform.positionX, fps);
     const posY = staticOrExpression(clip.transform.positionY, fps);
     const xExpr = `(W*(0.5+(${posX}))-w*${f(clip.transform.anchorX)})`;
     const yExpr = `(H*(0.5+(${posY}))-h*${f(clip.transform.anchorY)})`;
-    const enable = `enable='between(t,${f(clip.start)},${f(clipEnd(clip))})'`;
+    const enable = `enable=${escapeFilterGraph(`between(t,${f(clip.start)},${f(clipEnd(clip))})`)}`;
     const next = `[v${videoCounter}]`;
     filters.push(
-      `${videoCursor}[${label}]overlay=x=${xExpr}:y=${yExpr}:${enable}:eval=frame:format=auto:shortest=0${next}`,
+      `${videoCursor}[${label}]overlay=x=${escapeFilterGraph(xExpr)}:y=${escapeFilterGraph(yExpr)}:${enable}:eval=frame:format=auto:shortest=0${next}`,
     );
     videoCursor = next;
   }
@@ -323,10 +369,11 @@ export function buildFfmpegPlan(
     if (tempo) chain.push(tempo);
     if (clip.volume.gainDb !== 0) chain.push(`volume=${f(clip.volume.gainDb)}dB`);
     if (clip.volume.keyframes.length) {
-      chain.push(`volume=volume='${piecewiseLinearExpression(
+      const volumeExpr = piecewiseLinearExpression(
         { property: "volume", defaultValue: clip.volume.gainDb, keyframes: clip.volume.keyframes },
         fps,
-      )}/20':eval=frame`);
+      );
+      chain.push(`volume=volume=${escapeFilterGraph(`(${volumeExpr})/20`)}:eval=frame`);
     }
     if (clip.volume.fadeIn > 0) {
       chain.push(`afade=t=in:st=0:d=${f(clip.volume.fadeIn)}`);

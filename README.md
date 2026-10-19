@@ -109,7 +109,7 @@ Requires Node 20+/22+, Rust (stable) and the Tauri system libraries
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (40 tests)
+npm run test           # Vitest (42 tests)
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
 npm run tauri:dev      # desktop app
@@ -121,9 +121,14 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 40 / 40 passed             |
+| `vitest run`         | 42 / 42 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
+| FFmpeg end-to-end    | 6 / 6 renders passed       |
+
+Rendered fixtures cover empty projects, plain clips, keyframed scale, animated
+opacity (verified monotonic via luma sampling), text overlays, audio-only
+timelines and the full demo project (1920x1080 / 60 fps / H.264 + AAC, 24 s).
 
 ## License
 

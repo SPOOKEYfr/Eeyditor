@@ -135,12 +135,14 @@ export interface CreateClipOptions {
 export function createClip(options: CreateClipOptions): TimelineClip {
   const start = options.start ?? 0;
   const duration = options.duration ?? 5;
+  const kind = options.kind ?? "video";
   return {
+    ...(kind === "text" ? { text: createTextOverlay() } : {}),
     id: makeId("clip"),
     trackId: options.trackId,
     sourceId: options.sourceId ?? "",
     name: options.name ?? "Clip",
-    kind: options.kind ?? "video",
+    kind,
     start,
     duration,
     inPoint: options.inPoint ?? 0,

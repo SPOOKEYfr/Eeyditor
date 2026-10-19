@@ -5,7 +5,12 @@ import {
   escapeDrawtext,
   piecewiseLinearExpression,
 } from "../src/core/exporter/FFmpegBridge";
-import { createDemoProject, createEmptyProject, RENDER_PRESETS } from "../src/core/project/factory";
+import {
+  createClip,
+  createDemoProject,
+  createEmptyProject,
+  RENDER_PRESETS,
+} from "../src/core/project/factory";
 import type { KeyframeCurve } from "../src/types/timeline";
 
 describe("ffmpeg export pipeline", () => {
@@ -23,7 +28,7 @@ describe("ffmpeg export pipeline", () => {
     const project = createDemoProject();
     const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
     expect(plan.filterComplex).toContain("overlay=");
-    expect(plan.filterComplex).toContain("enable='between(t,");
+    expect(plan.filterComplex).toContain("enable=between(t\\,");
     expect(plan.audioLabel).toBe("aout");
   });
 
@@ -62,8 +67,41 @@ describe("ffmpeg export pipeline", () => {
       ],
     };
     const expression = piecewiseLinearExpression(curve, 30);
-    expect(expression).toContain("if(lt(t,");
+    expect(expression).toContain("gte(t,0)");
+    expect(expression).toContain("lt(t,2)");
     expect(expression).toContain("(t-");
+  });
+
+  it("emits a flat piecewise expression without deep if-nesting", () => {
+    const keyframes = Array.from({ length: 120 }, (_, index) => ({
+      id: `k${index}`,
+      time: index / 60,
+      value: index % 2,
+      interpolation: "linear" as const,
+      inHandle: { x: 0.33, y: 0 },
+      outHandle: { x: 0.33, y: 0 },
+    }));
+    const expression = piecewiseLinearExpression(
+      { property: "opacity", defaultValue: 1, keyframes },
+      60,
+    );
+    const depth = expression.split("if(").length - 1;
+    expect(depth).toBe(0);
+  });
+
+  it("names the drawtext filter with '=' before its options", () => {
+    const project = createEmptyProject();
+    const clip = createClip({
+      trackId: project.tracks[2].id,
+      sourceId: "",
+      start: 0,
+      duration: 2,
+      kind: "text",
+    });
+    project.tracks[2].clips = [clip];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("drawtext=text=");
+    expect(plan.filterComplex).not.toContain("drawtext:text=");
   });
 
   it("returns a constant expression for flat curves", () => {
