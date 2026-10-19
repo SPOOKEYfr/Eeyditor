@@ -2,7 +2,7 @@ import { Film, Image as ImageIcon, Music, Plus, Type } from "lucide-react";
 import type { MediaSource, SourceKind } from "../../types/timeline";
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { createMediaSource, makeId } from "../../core/project/factory";
-import { pickOpenPaths } from "../../lib/tauri";
+import { pickOpenPaths, probeMedia } from "../../lib/tauri";
 import { NeumorphicButton, NeumorphicPanel } from "../neumorphic";
 
 const MEDIA_EXTENSIONS = [
@@ -68,12 +68,25 @@ export function MediaBin() {
       return;
     }
     for (const path of paths) {
+      const extensionKind = kindForPath(path);
+      const probed = await probeMedia(path);
+      const kind =
+        extensionKind === "image"
+          ? "image"
+          : probed?.kind ?? (extensionKind === "audio" ? "audio" : "video");
       addSource(
         createMediaSource({
           path,
-          kind: kindForPath(path),
+          kind,
           name: path.split(/[\\/]/).pop() ?? "media",
-          duration: 8,
+          duration: probed && probed.duration > 0 ? probed.duration : 8,
+          width: probed?.width || undefined,
+          height: probed?.height || undefined,
+          fps: probed?.fps || undefined,
+          sampleRate: probed?.sampleRate || undefined,
+          channels: probed?.channels || undefined,
+          hasVideo: extensionKind === "image" ? true : (probed?.hasVideo ?? kind !== "audio"),
+          hasAudio: extensionKind === "image" ? false : (probed?.hasAudio ?? kind === "audio"),
         }),
       );
     }
@@ -86,7 +99,13 @@ export function MediaBin() {
     const track = state.project.tracks.find((candidate) => candidate.type === preferred) ?? state.project.tracks[0];
     if (!track) return;
     const id = editorStore.addClip(track.id, state.playhead);
-    editorStore.updateClip(id, (clip) => ({ ...clip, sourceId: source.id, name: source.name, kind: source.kind }));
+    editorStore.updateClip(id, (clip) => ({
+      ...clip,
+      sourceId: source.id,
+      name: source.name,
+      kind: source.kind,
+      duration: source.duration > 0 ? source.duration : clip.duration,
+    }));
   };
 
   return (

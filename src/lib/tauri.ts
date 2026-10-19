@@ -1,3 +1,5 @@
+import { parseProbe, type ProbedMedia } from "../core/media/probe";
+
 export function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -14,6 +16,12 @@ export async function invokeSafe<T>(
     console.error(`[eeyditor] invoke ${command} failed`, error);
     return null;
   }
+}
+
+/** Read real duration/stream metadata for a media file via ffprobe. */
+export async function probeMedia(path: string): Promise<ProbedMedia | null> {
+  const json = await invokeSafe<string>("probe_media", { path });
+  return json ? parseProbe(json) : null;
 }
 
 export async function pickOpenPaths(
