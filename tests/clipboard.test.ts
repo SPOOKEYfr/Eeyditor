@@ -98,6 +98,26 @@ describe("clip clipboard", () => {
     expect(clipCount()).toBe(0);
   });
 
+  it("sets and clears clip transitions", () => {
+    editorStore.loadProject(createEmptyProject());
+    const track = editorStore.getState().project.tracks[0];
+    const id = editorStore.addClip(track.id, 0);
+    editorStore.setClipTransition(id, "in", "wipe", 1.25, "up");
+    let clip = editorStore
+      .getState()
+      .project.tracks.flatMap((candidate) => candidate.clips)
+      .find((candidate) => candidate.id === id);
+    expect(clip?.transitionIn?.kind).toBe("wipe");
+    expect(clip?.transitionIn?.duration).toBeCloseTo(1.25);
+    expect(clip?.transitionIn?.direction).toBe("up");
+    editorStore.setClipTransition(id, "in", "none");
+    clip = editorStore
+      .getState()
+      .project.tracks.flatMap((candidate) => candidate.clips)
+      .find((candidate) => candidate.id === id);
+    expect(clip?.transitionIn).toBeUndefined();
+  });
+
   it("duplicates inline after the original", () => {
     const id = firstClipId();
     editorStore.selectClip(id);

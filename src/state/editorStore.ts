@@ -6,6 +6,8 @@ import {
   type KeyframeCurve,
   type TimelineClip,
   type TrackType,
+  type Transition,
+  type TransitionKind,
 } from "../types/timeline";
 import {
   createClip,
@@ -214,6 +216,32 @@ class EditorStore {
           : track,
       ),
     }), "Moved clips");
+  }
+
+  setClipTransition(
+    clipId: string,
+    edge: "in" | "out",
+    kind: TransitionKind | "none",
+    duration = 0.75,
+    direction: Transition["direction"] = "left",
+  ): void {
+    const key = edge === "in" ? "transitionIn" : "transitionOut";
+    this.updateClip(clipId, (clip) => {
+      if (kind === "none") {
+        const next = { ...clip };
+        delete next[key];
+        return next;
+      }
+      return {
+        ...clip,
+        [key]: {
+          id: clip[key]?.id ?? makeId("transition"),
+          kind,
+          duration: Math.max(0.05, duration),
+          direction,
+        },
+      };
+    }, `Set ${edge} transition`);
   }
 
   trimClipLive(clipId: string, edge: "start" | "end", newTime: number): void {

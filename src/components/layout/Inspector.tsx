@@ -1,5 +1,5 @@
 import { Sparkles, Trash2 } from "lucide-react";
-import type { EffectKind, TimelineClip } from "../../types/timeline";
+import type { EffectKind, TimelineClip, TransitionKind } from "../../types/timeline";
 
 type TransformProperty =
   | "opacity"
@@ -94,6 +94,63 @@ export function Inspector() {
           <NeumorphicSlider label="Gain" min={-60} max={12} step={0.5} value={clip.volume.gainDb} formatValue={(v) => `${v.toFixed(1)} dB`} onChange={(v) => setCurveDefault("volume", v)} />
           <NeumorphicSlider label="Fade In" min={0} max={5} step={0.05} value={clip.volume.fadeIn} formatValue={(v) => `${v.toFixed(2)}s`} onChange={(v) => editorStore.updateClip(clip.id, (current) => ({ ...current, volume: { ...current.volume, fadeIn: v } }), "Adjusted fade")} />
           <NeumorphicSlider label="Fade Out" min={0} max={5} step={0.05} value={clip.volume.fadeOut} formatValue={(v) => `${v.toFixed(2)}s`} onChange={(v) => editorStore.updateClip(clip.id, (current) => ({ ...current, volume: { ...current.volume, fadeOut: v } }), "Adjusted fade")} />
+        </Section>
+
+        <Section title="Transitions">
+          {(["in", "out"] as const).map((edge) => {
+            const transition = edge === "in" ? clip.transitionIn : clip.transitionOut;
+            const set = (
+              kind: TransitionKind | "none",
+              duration = transition?.duration ?? 0.75,
+              direction = transition?.direction ?? "left",
+            ) => editorStore.setClipTransition(clip.id, edge, kind, duration, direction);
+            return (
+              <div key={edge} className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="w-8 text-[10px] uppercase tracking-wider text-muted">{edge}</span>
+                  <select
+                    value={transition?.kind ?? "none"}
+                    onChange={(event) => set(event.target.value as TransitionKind | "none")}
+                    className="min-w-0 flex-1 rounded-lg bg-recessed px-2 py-1 text-[11px] text-ink shadow-recessed-sm outline-none"
+                  >
+                    <option value="none">none</option>
+                    <option value="fade">fade</option>
+                    <option value="dissolve">dissolve</option>
+                    <option value="wipe">wipe</option>
+                    <option value="slide">slide</option>
+                    <option value="zoom">zoom</option>
+                  </select>
+                </div>
+                {transition && (
+                  <>
+                    <NeumorphicSlider
+                      label="Duration"
+                      min={0.1}
+                      max={3}
+                      step={0.05}
+                      value={transition.duration}
+                      formatValue={(value) => `${value.toFixed(2)}s`}
+                      onChange={(value) => set(transition.kind, value, transition.direction)}
+                    />
+                    {(transition.kind === "wipe" || transition.kind === "slide") && (
+                      <select
+                        value={transition.direction}
+                        onChange={(event) =>
+                          set(transition.kind, transition.duration, event.target.value as typeof transition.direction)
+                        }
+                        className="w-full rounded-lg bg-recessed px-2 py-1 text-[11px] text-ink shadow-recessed-sm outline-none"
+                      >
+                        <option value="left">from left</option>
+                        <option value="right">from right</option>
+                        <option value="up">from top</option>
+                        <option value="down">from bottom</option>
+                      </select>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
         </Section>
 
         <Section title="Link">
