@@ -58,9 +58,12 @@ export function TitleBar() {
         <WindowButton title="Minimize" onClick={() => withWindow((win) => win.minimize())} icon={<Minus size={14} />} />
         <WindowButton title="Maximize" onClick={() => withWindow((win) => win.toggleMaximize())} icon={<Square size={12} />} />
         <WindowButton
-          title="Close"
+          title={dirty ? "Close (unsaved changes)" : "Close"}
           danger
-          onClick={() => withWindow((win) => win.close())}
+          onClick={() => {
+            if (dirty && !window.confirm("Discard unsaved changes and close?")) return;
+            void withWindow((win) => win.close());
+          }}
           icon={<X size={14} />}
         />
       </div>

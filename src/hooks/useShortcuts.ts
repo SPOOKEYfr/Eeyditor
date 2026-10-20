@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import { editorStore } from "../state/editorStore";
+import { openProject, saveProject } from "../lib/projectFile";
+import { clearAutosave } from "../lib/autosave";
 
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -60,6 +62,21 @@ export function useShortcuts(): void {
       if (mod && key === "v") {
         event.preventDefault();
         store.pasteClipboard();
+        return;
+      }
+      if (mod && key === "s") {
+        event.preventDefault();
+        void saveProject(state.project).then((message) => editorStore.setStatus(message))
+          .catch(() => editorStore.setStatus("Save failed"));
+        return;
+      }
+      if (mod && key === "o") {
+        event.preventDefault();
+        void openProject().then((project) => {
+          if (!project) return;
+          clearAutosave();
+          editorStore.loadProject(project);
+        });
         return;
       }
       if (mod && key === "d") {

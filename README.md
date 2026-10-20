@@ -52,6 +52,7 @@ or missing (see [Known limits](#known-limits)).
 | Autosave + restore prompt for unsaved sessions | ✅ working (localStorage) |
 | Composition resolution and frame-rate controls | ✅ working |
 | Drag-and-drop (OS files into the app, media onto timeline lanes) | ✅ working (Windows: native file drop only) |
+| Ctrl/Cmd+S save, Ctrl/Cmd+O open, unsaved-changes close guard | ✅ working |
 | CI (typecheck, tests, build, cargo check) | ✅ configured |
 | Blend modes in monitor and export | ✅ working (13 modes) |
 | Animated GIF and audio-only MP3 export | ✅ working |

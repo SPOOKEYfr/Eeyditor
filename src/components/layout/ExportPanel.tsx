@@ -2,15 +2,14 @@ import { useEffect, useState } from "react";
 import { Download, FilePlus2, FolderOpen, Save, X } from "lucide-react";
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { createEmptyProject, RENDER_PRESETS } from "../../core/project/factory";
-import { parseProject, serializeProject } from "../../core/project/serialize";
+import { parseProject } from "../../core/project/serialize";
 import { clearAutosave } from "../../lib/autosave";
+import { openProject, saveProject } from "../../lib/projectFile";
 import { buildFfmpegPlan } from "../../core/exporter/FFmpegBridge";
 import {
   cancelExport,
-  invokeSafe,
   isTauri,
   onExportProgress,
-  pickOpenPaths,
   pickSavePath,
   renderExport,
 } from "../../lib/tauri";
@@ -102,37 +101,29 @@ export function ExportPanel() {
   };
 
   const handleSave = async () => {
-    const contents = serializeProject(project);
-    const path = await pickSavePath(`${project.name}.eeyproj`, "eeyproj");
-    if (path) {
-      await invokeSafe("save_project", { path, contents });
-      clearAutosave();
-      editorStore.setStatus(`Saved ${path}`);
-      return;
-    }
-    downloadText(`${project.name}.eeyproj`, contents);
-    editorStore.setStatus("Downloaded project file");
+    editorStore.setStatus(await saveProject(project));
+    clearAutosave();
   };
 
   const handleOpen = async () => {
-    const paths = await pickOpenPaths(["eeyproj", "json"], false);
-    if (paths.length > 0) {
-      const contents = await invokeSafe<string>("load_project", { path: paths[0] });
-      if (contents) {
-        clearAutosave();
-        editorStore.loadProject(parseProject(contents));
-        return;
-      }
+    const opened = await openProject();
+    if (opened) {
+      clearAutosave();
+      editorStore.loadProject(opened);
+      return;
     }
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".eeyproj,.json";
-    input.onchange = async () => {
-      const file = input.files?.[0];
-      if (!file) return;
-      editorStore.loadProject(parseProject(await file.text()));
-    };
-    input.click();
+    if (!isTauri()) {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".eeyproj,.json";
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        clearAutosave();
+        editorStore.loadProject(parseProject(await file.text()));
+      };
+      input.click();
+    }
   };
 
   return (
@@ -303,12 +294,3 @@ async function copyText(text: string): Promise<void> {
   }
 }
 
-function downloadText(filename: string, contents: string): void {
-  const blob = new Blob([contents], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
