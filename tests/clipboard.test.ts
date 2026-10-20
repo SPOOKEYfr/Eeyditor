@@ -442,5 +442,56 @@ describe("media asset management", () => {
     expect(editorStore.getState().project.media).toHaveLength(0);
   });
 });
+
+
+describe("clip context-menu actions", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+    editorStore.updateProject((project) => ({ ...project, duration: 30 }), "seed");
+    const source = createMediaSource({ path: "generator://t", kind: "video", name: "T", duration: 20, hasVideo: true, hasAudio: false });
+    editorStore.updateProject((project) => ({ ...project, media: [source] }), "seed source");
+    const liveVideo = editorStore.getState().project.tracks[0];
+    const clip = createClip({ trackId: liveVideo.id, start: 4, duration: 2, kind: "video", sourceId: source.id, name: source.name });
+    editorStore.updateProject(
+      (project) => ({
+        ...project,
+        tracks: project.tracks.map((track) => (track.id === liveVideo.id ? { ...track, clips: [clip] } : track)),
+      }),
+      "seed clip",
+    );
+    clipId = clip.id;
+  });
+
+  let clipId = "";
+
+  it("duplicates a clip right after itself with fresh ids", () => {
+    editorStore.selectClip(clipId);
+    editorStore.duplicateClip(clipId);
+    const clips = editorStore.getState().project.tracks[0].clips;
+    expect(clips).toHaveLength(2);
+    expect(clips[1].id).not.toBe(clipId);
+    expect(clips[1].start).toBe(6);
+    expect(clips[1].duration).toBe(2);
+    expect(clips[1].sourceId).toBe(clips[0].sourceId);
+  });
+
+  it("deletes a clip in place without rippling", () => {
+    editorStore.selectClip(clipId);
+    editorStore.removeClip(clipId);
+    expect(editorStore.getState().project.tracks[0].clips).toHaveLength(0);
+    expect(editorStore.getState().selectedClipIds).toHaveLength(0);
+  });
+
+  it("refuses to duplicate or delete locked clips", () => {
+    editorStore.selectClip(clipId);
+    editorStore.setClipLocked(clipId, true);
+    editorStore.duplicateClip(clipId);
+    expect(editorStore.getState().status).toBe("Clip is locked");
+    expect(editorStore.getState().project.tracks[0].clips).toHaveLength(1);
+    editorStore.removeClip(clipId);
+    expect(editorStore.getState().status).toBe("Clip is locked");
+    expect(editorStore.getState().project.tracks[0].clips).toHaveLength(1);
+  });
+});
 });
 

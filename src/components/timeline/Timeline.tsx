@@ -218,6 +218,43 @@ export function Timeline() {
     return xToTime(clientX - rect.left, state.zoom, state.scroll);
   }, []);
 
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
+
+  const handleContextMenu = useCallback((event: React.MouseEvent) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const state = editorStore.getState();
+    const lanes = computeLanes(state.project.tracks, scrollYRef.current);
+    const lane = lanes.find((entry) => y >= entry.y && y <= entry.y + entry.height);
+    const time = xToTime(x, state.zoom, state.scroll);
+    const hit = lane?.track.clips.find(
+      (candidate) => time >= candidate.start && time < candidate.start + candidate.duration,
+    );
+    if (!hit) {
+      setContextMenu(null);
+      return;
+    }
+    editorStore.selectClip(hit.id);
+    setContextMenu({ x: event.clientX, y: event.clientY, clipId: hit.id });
+  }, []);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onDown = () => setContextMenu(null);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [contextMenu]);
+
   const handlePointerDown = useCallback(
     (event: React.PointerEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
@@ -477,11 +514,38 @@ export function Timeline() {
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
+            onContextMenu={handleContextMenu}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             onDragLeave={handleDragLeave}
           />
           <span hidden>{visualTick}</span>
+          {contextMenu && (
+            <div
+              className="fixed z-40 w-40 overflow-hidden rounded-xl bg-surface text-xs shadow-raised border border-black/10"
+              style={{ left: Math.min(contextMenu.x, window.innerWidth - 170), top: Math.min(contextMenu.y, window.innerHeight - 200) }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              {[
+                { label: "Split at playhead", run: () => editorStore.splitAtPlayhead() },
+                { label: "Duplicate clip", run: () => editorStore.duplicateClip(contextMenu.clipId) },
+                { label: "Delete clip", run: () => editorStore.removeClip(contextMenu.clipId) },
+                { label: "Ripple delete", run: () => editorStore.rippleDeleteSelected() },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => {
+                    item.run();
+                    setContextMenu(null);
+                  }}
+                  className="block w-full px-3 py-2 text-left text-muted transition-colors hover:bg-recessed hover:text-ink"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       <KeyframeTrack />

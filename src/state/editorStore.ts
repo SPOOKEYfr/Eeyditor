@@ -609,6 +609,44 @@ class EditorStore {
     }, `Duplicated ${source.name}`);
   }
 
+  /** Delete one clip in place (leaves the gap; Shift+Delete ripples instead). */
+  removeClip(clipId: string): void {
+    if (this.clipIsLocked(clipId)) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
+    this.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) => ({
+        ...track,
+        clips: track.clips.filter((clip) => clip.id !== clipId),
+      })),
+    }), "Deleted clip");
+    this.patch({ selectedClipIds: [] });
+  }
+
+  /** Duplicate one clip straight after itself on the same track. */
+  duplicateClip(clipId: string): void {
+    if (this.clipIsLocked(clipId)) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
+    const sourceTrack = this.state.project.tracks.find((track) =>
+      track.clips.some((clip) => clip.id === clipId),
+    );
+    const original = sourceTrack?.clips.find((clip) => clip.id === clipId);
+    if (!sourceTrack || !original) return;
+    const copy = { ...cloneClipIds(original), start: original.start + original.duration };
+    this.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) =>
+        track.id === sourceTrack.id
+          ? { ...track, clips: [...track.clips, copy] }
+          : track,
+      ),
+    }), "Duplicated clip");
+  }
+
   removeTrack(trackId: string): void {
     if (this.state.project.tracks.find((track) => track.id === trackId)?.locked) {
       this.patch({ status: "Track is locked" });
