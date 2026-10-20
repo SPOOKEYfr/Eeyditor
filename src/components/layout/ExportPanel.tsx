@@ -42,6 +42,7 @@ export function ExportPanel() {
   const setPreset = (id: string) => {
     const preset = RENDER_PRESETS.find((entry) => entry.id === id);
     if (!preset) return;
+    setOutputPath((current) => current.replace(/\.[^./\\]+$/, `.${preset.container}`));
     editorStore.updateProject((current) => ({ ...current, renderPreset: { ...preset } }), `Preset: ${preset.name}`);
   };
 
@@ -49,7 +50,7 @@ export function ExportPanel() {
     setBusy(true);
     let target = outputPath;
     if (isTauri()) {
-      const chosen = await pickSavePath(outputPath, "mp4");
+      const chosen = await pickSavePath(outputPath, project.renderPreset.container);
       if (!chosen) {
         editorStore.setStatus("Export cancelled");
         setBusy(false);

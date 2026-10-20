@@ -293,6 +293,7 @@ export function buildFfmpegPlan(
     const inputLabel = `[${entry.videoIndex}:v]`;
 
     chain.push(`trim=start=${f(Math.max(0, clip.inPoint))}:end=${f(clip.inPoint + clip.duration * clip.speed)}`);
+    if (clip.reversed) chain.push("reverse");
     chain.push("setpts=PTS-STARTPTS");
     if (clip.speed !== 1 && clip.speed > 0) {
       chain.push(`setpts=PTS/${f(clip.speed)}`);
@@ -405,11 +406,20 @@ export function buildFfmpegPlan(
     subtitleCursor = next;
   });
 
-  filters.push(`${subtitleCursor}format=${preset.pixelFormat}[vout]`);
+  const audioOnly = preset.videoCodec === "none";
+  if (preset.videoCodec === "gif") {
+    filters.push(`${subtitleCursor}format=rgb24,split[gifA][gifB]`);
+    filters.push("[gifA]palettegen=stats_mode=diff[gifPal]");
+    filters.push("[gifB][gifPal]paletteuse=dither=bayer:bayer_scale=5[vout]");
+  } else {
+    filters.push(`${subtitleCursor}format=${preset.pixelFormat}[vout]`);
+  }
 
   const audioLabels: string[] = [];
   let audioCounter = 0;
+  const buildAudio = preset.videoCodec !== "gif";
   for (const entry of clipInputs) {
+    if (!buildAudio) break;
     if (entry.audioIndex === undefined) continue;
     if (!audibleTrack(entry.track)) continue;
     const { clip } = entry;
@@ -417,6 +427,7 @@ export function buildFfmpegPlan(
     chain.push(
       `atrim=start=${f(Math.max(0, clip.inPoint))}:end=${f(clip.inPoint + clip.duration * clip.speed)}`,
     );
+    if (clip.reversed) chain.push("areverse");
     chain.push("asetpts=PTS-STARTPTS");
     const tempo = atempoChain(clip.speed);
     if (tempo) chain.push(tempo);
@@ -455,6 +466,8 @@ export function buildFfmpegPlan(
     audioLabels.push(`[${label}]`);
   }
 
+  if (audioOnly) filters.push("[vout]nullsink");
+
   let audioLabel: string | null = null;
   if (audioLabels.length === 1) {
     filters.push(`${audioLabels[0]}anull[aout]`);
@@ -467,13 +480,15 @@ export function buildFfmpegPlan(
   }
 
   const filterComplex = filters.join(";");
-  const args: string[] = ["-y", "-hide_banner", ...inputs, "-filter_complex", filterComplex, "-map", "[vout]"];
-  if (audioLabel) args.push("-map", `[${audioLabel}]`);
-
-  args.push(...videoCodecArgs(preset));
-  if (audioLabel) {
-    args.push("-c:a", preset.audioCodec, "-b:a", preset.audioBitrate, "-ar", String(preset.audioSampleRate), "-ac", String(preset.channels));
+  const encodeAudio = Boolean(audioLabel) && preset.videoCodec !== "gif";
+  const args: string[] = ["-y", "-hide_banner", ...inputs, "-filter_complex", filterComplex];
+  if (!audioOnly) {
+    args.push("-map", "[vout]", ...videoCodecArgs(preset));
   }
+  if (encodeAudio && audioLabel) {
+    args.push("-map", `[${audioLabel}]`, "-c:a", preset.audioCodec, "-b:a", preset.audioBitrate, "-ar", String(preset.audioSampleRate), "-ac", String(preset.channels));
+  }
+  if (audioOnly) args.push("-vn");
   args.push("-t", f(duration));
   if (preset.faststart && preset.container === "mp4") args.push("-movflags", "+faststart");
   args.push(outputPath);
@@ -482,7 +497,7 @@ export function buildFfmpegPlan(
     args,
     filterComplex,
     videoLabel: "vout",
-    audioLabel,
+    audioLabel: encodeAudio ? audioLabel : null,
     duration,
   };
 }
@@ -605,6 +620,9 @@ function effectFilter(kind: string, amount: number): string {
 }
 
 function videoCodecArgs(preset: RenderPreset): string[] {
+  if (preset.videoCodec === "gif") {
+    return ["-c:v", "gif", "-loop", "0"];
+  }
   if (preset.hardware === "nvenc" || preset.videoCodec.endsWith("_nvenc")) {
     return [
       "-c:v",

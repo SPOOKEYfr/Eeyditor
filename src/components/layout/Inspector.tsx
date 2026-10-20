@@ -88,6 +88,21 @@ export function Inspector() {
 
         <Section title="Timing">
           <NeumorphicSlider label="Speed" min={0.1} max={4} step={0.05} value={clip.speed} formatValue={(v) => `${v.toFixed(2)}x`} onChange={(v) => editorStore.setClipSpeed(clip.id, v)} />
+          <button
+            type="button"
+            onClick={() =>
+              editorStore.updateClip(
+                clip.id,
+                (current) => ({ ...current, reversed: !current.reversed }),
+                clip.reversed ? "Played forward" : "Played in reverse",
+              )
+            }
+            className={`w-full rounded-lg px-2 py-1 text-[11px] shadow-recessed-sm transition-colors ${
+              clip.reversed ? "bg-amber/20 text-amber" : "bg-recessed text-muted hover:text-ink"
+            }`}
+          >
+            {clip.reversed ? "Reversed" : "Reverse clip"}
+          </button>
         </Section>
 
         <Section title="Audio">

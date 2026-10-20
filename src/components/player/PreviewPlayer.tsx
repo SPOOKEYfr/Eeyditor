@@ -347,13 +347,22 @@ function syncPlayable(
     Number.isFinite(element.duration) && element.duration > 0
       ? element.duration
       : Number.POSITIVE_INFINITY;
-  const target = Math.min(
-    Math.max(0, clip.inPoint + local * rate),
-    Math.max(0, sourceDuration - 0.02),
-  );
+  const limit = Math.max(0, sourceDuration - 0.02);
+  const reversed = clip.reversed;
+  const target = reversed
+    ? Math.min(Math.max(0, clip.inPoint + (clip.duration - local) * rate), limit)
+    : Math.min(Math.max(0, clip.inPoint + local * rate), limit);
 
   element.playbackRate = rate;
-  if (playing) {
+  if (reversed) {
+    // Browsers cannot decode audio backwards, so a reversed clip previews as a
+    // muted frame scrub: the element stays paused and seeks each painted frame.
+    if (!element.paused) element.pause();
+    if (Math.abs(element.currentTime - target) > 0.02 && now - entry.lastSeek > 55) {
+      element.currentTime = target;
+      entry.lastSeek = now;
+    }
+  } else if (playing) {
     if (element.paused) {
       if (now - entry.lastSeek > 300) {
         element.currentTime = target;
@@ -372,7 +381,7 @@ function syncPlayable(
     }
   }
 
-  const gain = audible
+  const gain = audible && !reversed
     ? evaluateEnvelope(clip.volume, local, clip.duration) *
       transitionOpacityFactor(clip, local) *
       dbToGain(track.volume)

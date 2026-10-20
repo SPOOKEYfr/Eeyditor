@@ -51,6 +51,56 @@ describe("ffmpeg export pipeline", () => {
     expect(slidePlan.filterComplex).toContain("1-(t-");
   });
 
+  it("builds a GIF palette chain and drops the audio stream", () => {
+    const project = createEmptyProject();
+    project.renderPreset = { ...RENDER_PRESETS.find((preset) => preset.id === "gif-480p12")! };
+    const plan = buildFfmpegPlan(project, "/tmp/out.gif");
+    expect(plan.filterComplex).toContain("palettegen");
+    expect(plan.filterComplex).toContain("paletteuse");
+    expect(plan.args.join(" ")).toContain("-c:v gif");
+    expect(plan.args.join(" ")).not.toContain("-map [aout]");
+    expect(plan.audioLabel).toBeNull();
+  });
+
+  it("supports audio-only presets without mapping video", () => {
+    const project = createEmptyProject();
+    project.renderPreset = { ...RENDER_PRESETS.find((preset) => preset.id === "audio-mp3-320")! };
+    const track = project.tracks.find((entry) => entry.type === "audio");
+    if (!track) throw new Error("missing audio track");
+    const source = createMediaSource({ path: "generator://a", kind: "audio", name: "A", duration: 4, hasVideo: false, hasAudio: true });
+    project.media = [source];
+    track.clips = [
+      createClip({ trackId: track.id, sourceId: source.id, start: 0, duration: 3, kind: "audio" }),
+    ];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp3");
+    expect(plan.args.join(" ")).toContain("-vn");
+    expect(plan.args.join(" ")).not.toContain("-map [vout]");
+    expect(plan.args.join(" ")).toContain("-c:a libmp3lame");
+  });
+
+  it("reverses video and audio for reversed clips", () => {
+    const project = createEmptyProject();
+    const track = project.tracks.find((entry) => entry.type === "video");
+    if (!track) throw new Error("missing video track");
+    const source = createMediaSource({
+      path: "generator://rev",
+      kind: "generator",
+      name: "Rev",
+      duration: 4,
+      hasVideo: true,
+      hasAudio: true,
+    });
+    project.media = [source];
+    const clip = createClip({ trackId: track.id, sourceId: source.id, start: 0, duration: 3, kind: "generator" });
+    clip.reversed = true;
+    track.clips = [clip];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("reverse");
+    expect(plan.filterComplex).toContain("areverse");
+    expect(plan.filterComplex).toContain("trim=");
+    expect(plan.filterComplex).toContain("atrim=");
+  });
+
   it("scales zoom transitions per frame instead of fading", () => {
     const project = createEmptyProject();
     const track = project.tracks.find((entry) => entry.type === "video");
