@@ -1,9 +1,11 @@
 import {
+  Copy,
   Eye,
   EyeOff,
   Headphones,
   Lock,
   LockOpen,
+  Trash2,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -54,12 +56,60 @@ export function TrackHeader({ track, selected, height }: TrackHeaderProps) {
           style={{ background: TYPE_ACCENT[track.type] }}
         />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-medium text-ink">{track.name}</div>
+          <div
+            className="truncate text-xs font-medium text-ink"
+            title="Double-click to rename"
+            onDoubleClick={() => {
+              const name = window.prompt("Track name", track.name);
+              if (name && name.trim()) {
+                editorStore.updateProject(
+                  (project) => ({
+                    ...project,
+                    tracks: project.tracks.map((candidate) =>
+                      candidate.id === track.id ? { ...candidate, name: name.trim() } : candidate,
+                    ),
+                  }),
+                  "Renamed track",
+                  false,
+                );
+              }
+            }}
+          >
+            {track.name}
+          </div>
           <div className="text-[10px] uppercase tracking-wider text-muted">
             {track.type}
           </div>
         </div>
         <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            title="Duplicate track"
+            onClick={(event) => {
+              event.stopPropagation();
+              editorStore.duplicateTrack(track.id);
+            }}
+            className="grid h-5 w-5 place-items-center text-muted transition-colors hover:text-ink"
+          >
+            <Copy size={13} />
+          </button>
+          <button
+            type="button"
+            title={track.clips.length > 0 ? `Delete track (${track.clips.length} clips)` : "Delete track"}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (
+                track.clips.length > 0 &&
+                !window.confirm(`Delete ${track.name} and its ${track.clips.length} clip(s)?`)
+              ) {
+                return;
+              }
+              editorStore.removeTrack(track.id);
+            }}
+            className="grid h-5 w-5 place-items-center text-muted transition-colors hover:text-magenta"
+          >
+            <Trash2 size={13} />
+          </button>
           {track.type !== "audio" && (
             <IconToggle
               active={track.hidden}

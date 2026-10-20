@@ -7,6 +7,7 @@ import {
   type ExportRange,
   type SubtitleCue,
   type TimelineClip,
+  type TimelineTrack,
   type TrackType,
   type Transition,
   type TransitionKind,
@@ -587,6 +588,27 @@ class EditorStore {
     }, `Added ${type} track`);
   }
 
+  /** Duplicate a track (with fresh clip/keyframe ids) immediately below it. */
+  duplicateTrack(trackId: string): void {
+    const source = this.state.project.tracks.find((track) => track.id === trackId);
+    if (!source) return;
+    const copy: TimelineTrack = {
+      ...source,
+      id: makeId("track"),
+      name: `${source.name} copy`,
+      locked: false,
+      clips: source.clips.map((clip) => ({
+        ...cloneClipIds(clip),
+      })),
+    };
+    this.updateProject((project) => {
+      const index = project.tracks.findIndex((track) => track.id === trackId);
+      const tracks = [...project.tracks];
+      tracks.splice(index + 1, 0, copy);
+      return { ...project, tracks };
+    }, `Duplicated ${source.name}`);
+  }
+
   removeTrack(trackId: string): void {
     if (this.state.project.tracks.find((track) => track.id === trackId)?.locked) {
       this.patch({ status: "Track is locked" });
@@ -1088,3 +1110,29 @@ export function useEditorSelector<T>(selector: (state: EditorState) => T): T {
 }
 
 export { MIN_CLIP_DURATION };
+
+function cloneClipIds(clip: TimelineClip): TimelineClip {
+  return {
+    ...clip,
+    id: makeId("clip"),
+    effects: clip.effects.map((effect) => ({ ...effect, id: makeId("fx") })),
+    volume: {
+      ...clip.volume,
+      keyframes: clip.volume.keyframes.map((keyframe) => ({ ...keyframe, id: makeId("kf") })),
+    },
+    transform: Object.fromEntries(
+      Object.entries(clip.transform).map(([property, value]) => [
+        property,
+        value && typeof value === "object" && "keyframes" in value
+          ? {
+              ...value,
+              keyframes: (value.keyframes as Keyframe[]).map((keyframe) => ({
+                ...keyframe,
+                id: makeId("kf"),
+              })),
+            }
+          : value,
+      ]),
+    ),
+  } as TimelineClip;
+}

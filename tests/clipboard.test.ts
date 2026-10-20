@@ -335,5 +335,37 @@ describe("moving clips across tracks", () => {
     expect(editorStore.getState().status).toBe("Clip is locked");
   });
 });
+
+
+describe("duplicating tracks", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+  });
+
+  it("copies clips with fresh ids into a new track below the source", () => {
+    const source = createMediaSource({ path: "generator://d", kind: "video", name: "D", duration: 4, hasVideo: true, hasAudio: false });
+    editorStore.updateProject((project) => ({ ...project, media: [source] }), "seed");
+    const video = editorStore.getState().project.tracks.find((track) => track.type === "video")!;
+    const clip = createClip({ trackId: video.id, start: 1, duration: 2, kind: "video" });
+    editorStore.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) => (track.id === video.id ? { ...track, clips: [clip] } : track)),
+    }), "seed clip");
+    const before = editorStore.getState().project.tracks;
+
+    editorStore.duplicateTrack(video.id);
+
+    const after = editorStore.getState().project.tracks;
+    expect(after).toHaveLength(before.length + 1);
+    const copy = after[after.findIndex((track) => track.id === video.id) + 1];
+    expect(copy.name).toContain("copy");
+    expect(copy.locked).toBe(false);
+    expect(copy.clips).toHaveLength(1);
+    expect(copy.clips[0].id).not.toBe(clip.id);
+    expect(copy.clips[0].start).toBe(1);
+    expect(copy.clips[0].duration).toBe(2);
+    expect(after.find((track) => track.id === video.id)!.clips[0].id).toBe(clip.id);
+  });
+});
 });
 
