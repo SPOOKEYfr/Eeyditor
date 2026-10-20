@@ -1195,6 +1195,28 @@ class EditorStore {
     }, "Adjusted export range");
   }
 
+  /** Set the project length to cover all clips (never shrinks). */
+  fitDurationToContent(): void {
+    this.updateProject((project) => {
+      const end = Math.max(
+        0,
+        ...project.tracks.flatMap((track) => track.clips.map((clip) => clip.start + clip.duration)),
+      );
+      if (end <= 0) return project;
+      const cover = Math.ceil((end + 0.5) * 10) / 10;
+      return { ...project, duration: Math.max(project.duration, cover) };
+    }, "Fit duration to content");
+  }
+
+  /** Live lane-height resize during a handle drag (undo pooled at commit). */
+  setTrackHeightLive(trackId: string, height: number): void {
+    const safe = Math.max(40, Math.min(240, height));
+    this.updateProjectLive((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) => (track.id === trackId ? { ...track, height: safe } : track)),
+    }), "Resized track");
+  }
+
   setShortcuts(showShortcuts: boolean): void {
     this.patch({ showShortcuts });
   }

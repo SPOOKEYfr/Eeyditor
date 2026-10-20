@@ -563,5 +563,39 @@ describe("track reordering", () => {
     expect(after[after.length - 1]).toBe(before[0]);
   });
 });
+
+
+describe("project length and lane sizing helpers", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+  });
+
+  it("grows the project length to cover clips without shrinking", () => {
+    editorStore.updateProject((project) => ({ ...project, duration: 20 }), "seed");
+    const video = editorStore.getState().project.tracks.find((track) => track.type === "video")!;
+    const clip = createClip({ trackId: video.id, start: 12, duration: 5, kind: "video" });
+    editorStore.updateProject(
+      (project) => ({
+        ...project,
+        tracks: project.tracks.map((track) => (track.id === video.id ? { ...track, clips: [clip] } : track)),
+      }),
+      "seed clip",
+    );
+    editorStore.fitDurationToContent();
+    expect(editorStore.getState().project.duration).toBe(20);
+
+    editorStore.updateProject((project) => ({ ...project, duration: 5 }), "seed short");
+    editorStore.fitDurationToContent();
+    expect(editorStore.getState().project.duration).toBe(17.5);
+  });
+
+  it("clamps lane-height resizes to the 40-240 range", () => {
+    const id = editorStore.getState().project.tracks[0].id;
+    editorStore.setTrackHeightLive(id, -10);
+    expect(editorStore.getState().project.tracks[0].height).toBe(40);
+    editorStore.setTrackHeightLive(id, 999);
+    expect(editorStore.getState().project.tracks[0].height).toBe(240);
+  });
+});
 });
 

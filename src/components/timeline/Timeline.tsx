@@ -9,6 +9,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
+  ChevronsRight,
 } from "lucide-react";
 import type { EeyditorProject, TimelineClip, TimelineTrack } from "../../types/timeline";
 import {
@@ -192,6 +193,11 @@ export function Timeline() {
         editorStore.zoomBy(Math.exp(-event.deltaY * 0.0025), mouseX);
         return;
       }
+      if (event.altKey) {
+        const frame = 1 / Math.max(1, state.project.frameRate);
+        editorStore.setPlayhead(state.playhead + Math.sign(event.deltaY || event.deltaX) * frame);
+        return;
+      }
       if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
         editorStore.setScroll(state.scroll + (event.deltaX || event.deltaY));
         return;
@@ -222,6 +228,34 @@ export function Timeline() {
   const [reorderLine, setReorderLine] = useState<number | null>(null);
   const reorderRef = useRef<{ id: string; from: number } | null>(null);
   const trackStackRef = useRef<HTMLDivElement | null>(null);
+
+  const resizeRef = useRef<{ id: string; startHeight: number; startBottom: number } | null>(null);
+
+  const beginTrackResize = useCallback((trackId: string, event: React.PointerEvent<HTMLDivElement>) => {
+    const strip = event.currentTarget;
+    const wrapper = strip.parentElement;
+    const track = editorStore.getState().project.tracks.find((entry) => entry.id === trackId);
+    if (!track || !wrapper) return;
+    resizeRef.current = {
+      id: trackId,
+      startHeight: track.height,
+      startBottom: wrapper.getBoundingClientRect().bottom,
+    };
+    strip.setPointerCapture(event.pointerId);
+    editorStore.beginInteraction();
+  }, []);
+
+  const handleTrackResizeMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const saved = resizeRef.current;
+    if (!saved || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    editorStore.setTrackHeightLive(saved.id, saved.startHeight + (event.clientY - saved.startBottom));
+  }, []);
+
+  const handleTrackResizeUp = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!resizeRef.current || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    resizeRef.current = null;
+    editorStore.commitInteraction("Resized track");
+  }, []);
 
   const beginTrackReorder = useCallback((trackId: string) => {
     const from = editorStore.getState().project.tracks.findIndex((track) => track.id === trackId);
@@ -584,12 +618,19 @@ export function Timeline() {
             style={{ transform: `translateY(${-scrollY}px)` }}
           >
             {tracks.map((track) => (
-              <div key={track.id} data-track-id={track.id}>
+              <div key={track.id} data-track-id={track.id} className="relative">
                 <TrackHeader
                   track={track}
                   selected={track.id === selectedTrackId}
                   height={track.height + LANE_GAP}
                   onReorderStart={() => beginTrackReorder(track.id)}
+                />
+                <div
+                  className="absolute bottom-0 left-0 z-20 h-1.5 w-full cursor-ns-resize"
+                  title="Drag to resize this lane"
+                  onPointerDown={(event) => beginTrackResize(track.id, event)}
+                  onPointerMove={handleTrackResizeMove}
+                  onPointerUp={handleTrackResizeUp}
                 />
               </div>
             ))}
@@ -1039,6 +1080,13 @@ function TimelineToolbar({ onFitZoom }: { onFitZoom: () => void }) {
           title="Fit project in view"
           onClick={onFitZoom}
           icon={<Maximize2 size={15} />}
+        />
+        <NeumorphicButton
+          size="sm"
+          iconOnly
+          title="Fit project length to content"
+          onClick={() => editorStore.fitDurationToContent()}
+          icon={<ChevronsRight size={15} />}
         />
       </div>
     </div>

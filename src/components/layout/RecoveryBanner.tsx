@@ -8,11 +8,19 @@ export function RecoveryBanner() {
 
   if (!visible || !record) return null;
   const minutes = Math.max(0, Math.round((Date.now() - record.savedAt) / 60000));
+  const age = minutes < 60
+    ? minutes < 1
+      ? "just now"
+      : `${minutes} min ago`
+    : minutes < 60 * 24
+      ? `${Math.round(minutes / 60)} h ago`
+      : `${Math.round(minutes / (60 * 24))} days ago`;
+  const stale = minutes >= 60 * 24;
 
   return (
     <div className="fixed left-1/2 top-12 z-30 flex -translate-x-1/2 items-center gap-3 rounded-xl bg-surface px-3 py-2 text-[11px] text-ink shadow-raised">
-      <span className="text-muted">
-        Unsaved session from {minutes < 1 ? "just now" : `${minutes} min ago`}:
+      <span className={stale ? "text-amber" : "text-muted"}>
+        Unsaved session from {age}:
         <span className="ml-1 text-ink/80">{record.project.name}</span>
       </span>
       <button
