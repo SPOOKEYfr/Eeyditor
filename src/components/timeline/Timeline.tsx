@@ -23,7 +23,7 @@ import {
   timeToX,
   xToTime,
 } from "../../core/timeline/engine";
-import { syntheticChannel } from "../../core/audio/waveform";
+import { syntheticChannel, waveformBand } from "../../core/audio/waveform";
 import { audioWaveform } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
 import { TrackHeader } from "./TrackHeader";
@@ -532,21 +532,28 @@ function drawClip(
   ctx.fill();
 
   // Audio waveform.
-  if (clip.kind === "audio" || lane.track.type === "audio") {
+  const hasRealWaveform = realWaveforms.has(clip.sourceId);
+  const band = waveformBand(
+    clip.kind,
+    clipHeight,
+    hasRealWaveform,
+    clip.kind === "audio" || lane.track.type === "audio",
+  );
+  if (band && (clip.kind === "audio" || lane.track.type === "audio" || hasRealWaveform)) {
     const samples = waveformFor(clip);
     ctx.save();
     ctx.beginPath();
     roundRect(ctx, drawX + 1, top, drawW - 2, clipHeight, 7);
     ctx.clip();
-    ctx.strokeStyle = hexToRgba(clip.color, 0.7);
+    ctx.strokeStyle = hexToRgba(clip.color, band.alpha);
     ctx.lineWidth = 1;
     ctx.beginPath();
-    const mid = top + clipHeight / 2;
+    const mid = top + band.mid;
     const columns = Math.max(2, Math.floor(drawW / 2));
     for (let i = 0; i < columns; i += 1) {
       const sample = samples[Math.floor((i / columns) * samples.length)];
       const x = drawX + i * 2;
-      const amplitude = (sample * clipHeight) / 2.4;
+      const amplitude = sample * band.amplitude;
       ctx.moveTo(x, mid - amplitude);
       ctx.lineTo(x, mid + amplitude);
     }

@@ -5,6 +5,7 @@ import {
   gainToDb,
   mixToMono,
   peaksToAmplitudes,
+  waveformBand,
 } from "../src/core/audio/waveform";
 
 describe("audio waveform math", () => {
@@ -36,5 +37,13 @@ describe("audio waveform math", () => {
     expect(dbToGain(-6)).toBeCloseTo(0.501, 2);
     expect(gainToDb(1)).toBeCloseTo(0);
     expect(gainToDb(0)).toBe(-120);
+  });
+
+  it("places waveforms for audio clips and audio-bearing video clips", () => {
+    expect(waveformBand("audio", 60, false, false)).toEqual({ mid: 30, amplitude: 25, alpha: 0.7 });
+    expect(waveformBand("video", 60, true, false)?.alpha).toBeCloseTo(0.45);
+    expect(waveformBand("video", 60, false, false)).toBeNull();
+    expect(waveformBand("image", 60, false, false)).toBeNull();
+    expect(waveformBand("video", 60, false, true)?.mid).toBeCloseTo(30);
   });
 });

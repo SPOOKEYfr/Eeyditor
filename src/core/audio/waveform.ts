@@ -1,4 +1,4 @@
-import type { AudioEnvelope, Keyframe } from "../../types/timeline";
+import type { AudioEnvelope, Keyframe, SourceKind } from "../../types/timeline";
 import { evaluateKeyframes, clamp, clamp01 } from "../keyframes/bezier";
 
 export interface Peaks {
@@ -181,4 +181,33 @@ export function syntheticChannel(
 
 export function keyframesToDbCurve(keyframes: Keyframe[]): number[] {
   return keyframes.map((keyframe) => keyframe.value);
+}
+
+export interface WaveformBand {
+  /** Vertical centre of the drawn waveform, relative to the clip top. */
+  mid: number;
+  /** Half-height of the waveform, in pixels. */
+  amplitude: number;
+  /** Stroke alpha for the waveform line. */
+  alpha: number;
+}
+
+/**
+ * Geometry for a clip's waveform, or null when the clip has nothing to draw.
+ * Audio clips get a centred band; video clips with a real waveform get a
+ * slimmer band tucked under the label.
+ */
+export function waveformBand(
+  kind: SourceKind,
+  clipHeight: number,
+  hasAudio: boolean,
+  onAudioTrack: boolean,
+): WaveformBand | null {
+  if (kind === "audio" || onAudioTrack) {
+    return { mid: clipHeight / 2, amplitude: clipHeight / 2.4, alpha: 0.7 };
+  }
+  if (kind === "video" && hasAudio) {
+    return { mid: clipHeight * 0.72, amplitude: clipHeight / 3.6, alpha: 0.45 };
+  }
+  return null;
 }
