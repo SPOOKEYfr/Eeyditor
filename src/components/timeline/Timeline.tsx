@@ -218,7 +218,7 @@ export function Timeline() {
     return xToTime(clientX - rect.left, state.zoom, state.scroll);
   }, []);
 
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string; trackId: string } | null>(null);
   const [reorderLine, setReorderLine] = useState<number | null>(null);
   const reorderRef = useRef<{ id: string; from: number } | null>(null);
   const trackStackRef = useRef<HTMLDivElement | null>(null);
@@ -280,7 +280,7 @@ export function Timeline() {
       return;
     }
     editorStore.selectClip(hit.id);
-    setContextMenu({ x: event.clientX, y: event.clientY, clipId: hit.id });
+    setContextMenu({ x: event.clientX, y: event.clientY, clipId: hit.id, trackId: lane!.track.id });
   }, []);
 
   useEffect(() => {
@@ -627,6 +627,7 @@ export function Timeline() {
                 { label: "Duplicate clip", run: () => editorStore.duplicateClip(contextMenu.clipId) },
                 { label: "Delete clip", run: () => editorStore.removeClip(contextMenu.clipId) },
                 { label: "Ripple delete", run: () => editorStore.rippleDeleteSelected() },
+                { label: "Close gaps on track", run: () => editorStore.closeGaps(contextMenu.trackId) },
               ].map((item) => (
                 <button
                   key={item.label}
