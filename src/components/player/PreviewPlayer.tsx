@@ -27,7 +27,8 @@ import {
   wipeRect,
   zoomFactor,
 } from "../../core/timeline/transitions";
-import { convertMediaUrl } from "../../lib/tauri";
+import { applyLutToRgba, cachedCube, lutPath, parseCube, rememberCube } from "../../core/effects/lut";
+import { convertMediaUrl, invokeSafe, isTauri } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
 import type { BlendMode, MediaSource, TimelineClip, TimelineTrack } from "../../types/timeline";
 
@@ -174,6 +175,8 @@ function drawTextClip(
   void track;
 }
 
+const pendingCubes = new Set<string>();
+
 function drawMediaClip(
   ctx: CanvasRenderingContext2D,
   element: HTMLVideoElement | HTMLImageElement,
@@ -200,6 +203,8 @@ function drawMediaClip(
   const fx = canvasEffectPlan(clip.effects);
   const key = chromaKeyStrength(clip.effects);
   const sharpen = effectAmount(clip.effects, "sharpen");
+  const lutFile = lutPath(clip.effects);
+  const lut = lutFile ? cachedCube(lutFile) ?? null : null;
   const wipe = wipeRect(clip, local, rect);
   const slide = slideOffset(clip, local, rect);
 
@@ -222,7 +227,7 @@ function drawMediaClip(
   ctx.rotate((rotation * Math.PI) / 180);
 
   const scratch =
-    key > 0 || sharpen > 0
+    key > 0 || sharpen > 0 || lut
       ? chromaKeyScratch(Math.abs(drawW), Math.abs(drawH))
       : null;
   if (scratch) {
@@ -233,8 +238,13 @@ function drawMediaClip(
     keyCtx.filter = fx.filter;
     keyCtx.drawImage(element, 0, 0, keyWidth, keyHeight);
     keyCtx.filter = "none";
-    if (sharpen > 0) applySharpen(keyCtx, keyWidth, keyHeight, sharpen);
     if (key > 0) applyChromaKey(keyCtx, keyWidth, keyHeight, key);
+    if (lut) {
+      const frame = keyCtx.getImageData(0, 0, keyWidth, keyHeight);
+      applyLutToRgba(frame.data, keyWidth, keyHeight, lut);
+      keyCtx.putImageData(frame, 0, 0);
+    }
+    if (sharpen > 0) applySharpen(keyCtx, keyWidth, keyHeight, sharpen);
     ctx.filter = "none";
     ctx.drawImage(
       scratch.canvas,
@@ -423,6 +433,26 @@ export function PreviewPlayer() {
   const playing = useEditorSelector((state) => state.playing);
   const loop = useEditorSelector((state) => state.loop);
   const media = useEditorSelector((state) => state.project.media);
+  const tracks = useEditorSelector((state) => state.project.tracks);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+    const wanted = new Set<string>();
+    for (const track of tracks) {
+      for (const clip of track.clips) {
+        const path = lutPath(clip.effects);
+        if (path) wanted.add(path);
+      }
+    }
+    for (const path of wanted) {
+      if (cachedCube(path) !== undefined || pendingCubes.has(path)) continue;
+      pendingCubes.add(path);
+      void invokeSafe<string>("load_project", { path })
+        .then((text) => rememberCube(path, text ? parseCube(text) : null))
+        .catch(() => rememberCube(path, null))
+        .finally(() => pendingCubes.delete(path));
+    }
+  }, [tracks]);
 
   useEffect(() => {
     let cancelled = false;

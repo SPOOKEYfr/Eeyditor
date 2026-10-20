@@ -326,7 +326,8 @@ export function buildFfmpegPlan(
       // Effects layers.
       for (const effect of clip.effects) {
         if (!effect.enabled) continue;
-        chain.push(effectFilter(effect.kind, effect.amount));
+        const filter = effectFilter(effect.kind, effect.amount, effect.params);
+        if (filter) chain.push(filter);
       }
     }
 
@@ -607,7 +608,11 @@ function slideExpression(clip: TimelineClip): { x: string; y: string } {
   };
 }
 
-function effectFilter(kind: string, amount: number): string {
+function effectFilter(
+  kind: string,
+  amount: number,
+  params: Record<string, number | string | boolean> = {},
+): string | null {
   switch (kind) {
     case "blur":
       return `gblur=sigma=${f(Math.max(0, amount * 12))}`;
@@ -629,6 +634,12 @@ function effectFilter(kind: string, amount: number): string {
       const similarity = Math.min(1, 0.2 + Math.max(0, amount) * 0.1);
       const blend = Math.min(1, 0.1 + Math.max(0, amount) * 0.05);
       return `colorkey=green:${f(similarity)}:${f(blend)}`;
+    }
+    case "lut": {
+      const path = params.path;
+      return typeof path === "string" && path.length > 0
+        ? `lut3d=file=${escapeFilterGraph(path)}`
+        : null;
     }
     default:
       return "null";

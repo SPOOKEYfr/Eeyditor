@@ -8,6 +8,7 @@ import {
 import {
   createClip,
   createDemoProject,
+  createEffect,
   createEmptyProject,
   createMediaSource,
   RENDER_PRESETS,
@@ -49,6 +50,23 @@ describe("ffmpeg export pipeline", () => {
     const slidePlan = buildFfmpegPlan(project, "/tmp/out.mp4");
     expect(slidePlan.filterComplex).toContain("+W*");
     expect(slidePlan.filterComplex).toContain("1-(t-");
+  });
+
+  it("applies 3D LUT effects and skips them without a file", () => {
+    const project = createEmptyProject();
+    const track = project.tracks.find((entry) => entry.type === "video");
+    if (!track) throw new Error("missing video track");
+    const clip = createClip({ trackId: track.id, start: 0, duration: 3, kind: "video" });
+    const effect = createEffect("lut");
+    effect.params.path = "/tmp/luts/teal.cube";
+    clip.effects = [effect];
+    track.clips = [clip];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("lut3d=file=/tmp/luts/teal.cube");
+
+    effect.params = {};
+    const bare = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(bare.filterComplex).not.toContain("lut3d");
   });
 
   it("blends non-normal clip modes through an alpha-masked blend pass", () => {

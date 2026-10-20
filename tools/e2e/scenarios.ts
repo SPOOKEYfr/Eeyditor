@@ -9,6 +9,7 @@ import {
 } from "../../src/core/project/factory";
 import { createKeyframe } from "../../src/core/keyframes/bezier";
 import type { EeyditorProject, TimelineClip } from "../../src/types/timeline";
+import { createEffect } from "../../src/core/project/factory";
 import { distance, exitCode, probe, render, report, sample, workDir } from "./harness";
 
 function videoTrack(project: EeyditorProject) {
@@ -220,7 +221,26 @@ for (const [kind, direction] of [
   report(Boolean(out) && inside < outside && outside > 20, `multiply-over-layer (inside=${inside} outside=${outside})`);
 }
 
-// 13. Animated GIF preset emits a real GIF.
+// 13. A 3D LUT effect grades the clip (invert equals the RGB complement).
+{
+  const cube = join(process.cwd(), "tools/e2e/fixtures/invert.cube");
+  const plain = generatorProject();
+  const baseline = render(plain.project, "lut-baseline");
+  const graded = generatorProject();
+  const effect = createEffect("lut");
+  effect.params.path = cube;
+  graded.clip.effects = [effect];
+  const lutted = render(graded.project, "lut-invert");
+  const before = baseline ? sample(baseline, 2, "1:1") : [];
+  const after = lutted ? sample(lutted, 2, "1:1") : [];
+  const complement =
+    before.length === 3 &&
+    after.length === 3 &&
+    before.every((value, index) => Math.abs(after[index] - (255 - value)) < 36);
+  report(Boolean(baseline && lutted) && complement, `lut-inverts (before=${before.join(",")} after=${after.join(",")})`);
+}
+
+// 14. Animated GIF preset emits a real GIF.
 {
   const { project } = generatorProject();
   project.duration = 2;
@@ -230,7 +250,7 @@ for (const [kind, direction] of [
   report(Boolean(out) && info.includes("codec_name=gif") && info.includes("width=480"), "gif-preset");
 }
 
-// 14. Audio-only preset emits an MP3 with no video stream.
+// 15. Audio-only preset emits an MP3 with no video stream.
 {
   const { project } = generatorProject("audio");
   project.duration = 2;

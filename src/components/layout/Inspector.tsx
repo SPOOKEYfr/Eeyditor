@@ -9,6 +9,7 @@ type TransformProperty =
   | "positionY"
   | "rotation";
 import { editorStore, useEditorSelector } from "../../state/editorStore";
+import { pickOpenPaths } from "../../lib/tauri";
 import { createEffect } from "../../core/project/factory";
 import { NeumorphicPanel, NeumorphicSlider } from "../neumorphic";
 
@@ -38,6 +39,7 @@ const EFFECT_KINDS: EffectKind[] = [
   "vignette",
   "glow",
   "chroma-key",
+  "lut",
 ];
 
 function findClip(clipId: string | null, project: ReturnType<typeof editorStore.getState>["project"]): TimelineClip | null {
@@ -289,6 +291,37 @@ export function Inspector() {
                   <Trash2 size={12} />
                 </button>
               </div>
+              {effect.kind === "lut" && (
+                <div className="mt-1 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const paths = await pickOpenPaths(["cube"], false);
+                      if (!paths.length) return;
+                      editorStore.updateClip(
+                        clip.id,
+                        (current) => ({
+                          ...current,
+                          effects: current.effects.map((entry) =>
+                            entry.id === effect.id
+                              ? { ...entry, params: { ...entry.params, path: paths[0] } }
+                              : entry,
+                          ),
+                        }),
+                        "Chose LUT",
+                      );
+                    }}
+                    className="flex-1 rounded-md bg-recessed px-2 py-1 text-[10px] text-muted shadow-recessed-sm transition-colors hover:text-ink"
+                  >
+                    {typeof effect.params.path === "string" ? "Change .cube" : "Choose .cube"}
+                  </button>
+                  <span className="max-w-[120px] truncate font-mono text-[9px] text-muted">
+                    {typeof effect.params.path === "string"
+                      ? effect.params.path.split("/").pop()
+                      : "none"}
+                  </span>
+                </div>
+              )}
               <input
                 type="range"
                 min={0}
