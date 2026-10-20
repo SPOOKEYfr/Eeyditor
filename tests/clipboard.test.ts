@@ -367,5 +367,49 @@ describe("duplicating tracks", () => {
     expect(after.find((track) => track.id === video.id)!.clips[0].id).toBe(clip.id);
   });
 });
+
+
+describe("numeric clip timing", () => {
+  let clip: ReturnType<typeof createClip>;
+
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+    editorStore.updateProject((project) => ({ ...project, duration: 30 }), "seed");
+    const video = editorStore.getState().project.tracks.find((track) => track.type === "video")!;
+    clip = createClip({ trackId: video.id, start: 2, duration: 3, kind: "video" });
+    editorStore.updateProject(
+      (project) => ({
+        ...project,
+        tracks: project.tracks.map((track) => (track.id === video.id ? { ...track, clips: [clip] } : track)),
+      }),
+      "seed clip",
+    );
+  });
+
+  const clipId = () => editorStore.getState().project.tracks.find((track) => track.type === "video")!.clips[0].id;
+
+  it("moves the start without changing the length", () => {
+    const id = clipId();
+    const inPoint = clip.inPoint;
+    editorStore.setClipStart(id, 7.5);
+    const moved = editorStore.getState().project.tracks.find((track) => track.type === "video")!.clips[0];
+    expect(moved.start).toBe(7.5);
+    expect(moved.duration).toBeCloseTo(clip.duration);
+    expect(moved.inPoint).toBeCloseTo(inPoint);
+  });
+
+  it("extends and shortens the length like an end-trim", () => {
+    const id = clipId();
+    const inPoint = clip.inPoint;
+    editorStore.setClipDuration(id, 6);
+    const longer = editorStore.getState().project.tracks.find((track) => track.type === "video")!.clips[0];
+    expect(longer.duration).toBeCloseTo(6);
+    expect(longer.outPoint).toBeCloseTo(inPoint + 6);
+    editorStore.setClipDuration(id, 0.01);
+    const shorter = editorStore.getState().project.tracks.find((track) => track.type === "video")!.clips[0];
+    expect(shorter.duration).toBeGreaterThan(0);
+    expect(shorter.duration).toBeLessThanOrEqual(0.05);
+  });
+});
 });
 

@@ -129,6 +129,32 @@ export function Inspector() {
         </Section>
 
         <Section title="Timing">
+          <div className="grid grid-cols-2 gap-1.5">
+            <label className="block text-[10px] uppercase tracking-wider text-muted">
+              Start
+              <input
+                type="number"
+                min={0}
+                step={0.01}
+                value={clip.start.toFixed(2)}
+                disabled={clip.locked}
+                onChange={(event) => editorStore.setClipStart(clip.id, Number(event.target.value))}
+                className="mt-1 w-full rounded-lg bg-recessed px-2 py-1 font-mono text-[10px] text-ink shadow-recessed-sm outline-none"
+              />
+            </label>
+            <label className="block text-[10px] uppercase tracking-wider text-muted">
+              Length
+              <input
+                type="number"
+                min={0.02}
+                step={0.01}
+                value={clip.duration.toFixed(2)}
+                disabled={clip.locked}
+                onChange={(event) => editorStore.setClipDuration(clip.id, Number(event.target.value))}
+                className="mt-1 w-full rounded-lg bg-recessed px-2 py-1 font-mono text-[10px] text-ink shadow-recessed-sm outline-none"
+              />
+            </label>
+          </div>
           <NeumorphicSlider label="Speed" min={0.1} max={4} step={0.05} value={clip.speed} formatValue={(v) => `${v.toFixed(2)}x`} onChange={(v) => editorStore.setClipSpeed(clip.id, v)} />
           <button
             type="button"

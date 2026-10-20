@@ -856,6 +856,36 @@ class EditorStore {
     this.updateClip(clipId, (clip) => ({ ...clip, speed: safe }), "Changed speed");
   }
 
+  /** Numeric start edit; resolves overlaps like a timeline drag. */
+  setClipStart(clipId: string, start: number): void {
+    if (this.clipIsLocked(clipId)) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
+    const target = Math.max(0, start);
+    this.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) => {
+        if (!track.clips.some((clip) => clip.id === clipId)) return track;
+        return { ...track, clips: moveClipEngine(track.clips, clipId, target) };
+      }),
+    }), "Set clip start");
+  }
+
+  /** Numeric duration edit; trims the end edge and respects source bounds. */
+  setClipDuration(clipId: string, duration: number): void {
+    if (this.clipIsLocked(clipId)) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
+    const length = Math.max(MIN_CLIP_DURATION, duration);
+    this.updateClip(
+      clipId,
+      (clip) => trimClipEngine(clip, "end", clip.start + length),
+      "Set clip length",
+    );
+  }
+
   // ---- keyframes ---------------------------------------------------------
 
   addKeyframeAtPlayhead(clipId: string, property: AnimatableProperty): void {
