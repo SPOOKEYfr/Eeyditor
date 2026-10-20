@@ -99,8 +99,28 @@ export function MediaBin() {
     return true;
   };
 
-  const importMediaPaths = async (paths: string[]) => {
-    await importMediaPaths(paths);
+  const importMediaPaths = async (paths: string[]): Promise<MediaSource[]> => {
+    const added: MediaSource[] = [];
+    for (const path of paths) {
+      const probe = await probeMedia(path);
+      if (!probe) continue;
+      const source = createMediaSource({
+        path,
+        kind: probe.kind ?? kindForPath(path),
+        duration: probe.duration ?? 0,
+        hasVideo: probe.hasVideo,
+        hasAudio: probe.hasAudio,
+        width: probe.width ?? 1920,
+        height: probe.height ?? 1080,
+        fps: probe.fps ?? 30,
+      });
+      editorStore.updateProject(
+        (project) => ({ ...project, media: [...project.media, source] }),
+        "Added media",
+      );
+      added.push(source);
+    }
+    return added;
   };
 
   const handleDroppedPaths = async (paths: string[]) => {
