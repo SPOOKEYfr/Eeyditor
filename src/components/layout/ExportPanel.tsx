@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Download, FolderOpen, Save, X } from "lucide-react";
+import { Download, FilePlus2, FolderOpen, Save, X } from "lucide-react";
 import { editorStore, useEditorSelector } from "../../state/editorStore";
-import { RENDER_PRESETS } from "../../core/project/factory";
+import { createEmptyProject, RENDER_PRESETS } from "../../core/project/factory";
 import { parseProject, serializeProject } from "../../core/project/serialize";
+import { clearAutosave } from "../../lib/autosave";
 import { buildFfmpegPlan } from "../../core/exporter/FFmpegBridge";
 import {
   cancelExport,
@@ -91,11 +92,21 @@ export function ExportPanel() {
     if (jobId) await cancelExport(jobId);
   };
 
+  const handleNew = () => {
+    if (editorStore.getState().past.length > 0 && !window.confirm("Discard unsaved changes and start a new project?")) {
+      return;
+    }
+    clearAutosave();
+    editorStore.loadProject(createEmptyProject());
+    editorStore.setStatus("New project");
+  };
+
   const handleSave = async () => {
     const contents = serializeProject(project);
     const path = await pickSavePath(`${project.name}.eeyproj`, "eeyproj");
     if (path) {
       await invokeSafe("save_project", { path, contents });
+      clearAutosave();
       editorStore.setStatus(`Saved ${path}`);
       return;
     }
@@ -108,6 +119,7 @@ export function ExportPanel() {
     if (paths.length > 0) {
       const contents = await invokeSafe<string>("load_project", { path: paths[0] });
       if (contents) {
+        clearAutosave();
         editorStore.loadProject(parseProject(contents));
         return;
       }
@@ -200,6 +212,7 @@ export function ExportPanel() {
           {busy && (
             <NeumorphicButton size="sm" iconOnly title="Cancel export" onClick={handleCancel} icon={<X size={14} />} />
           )}
+          <NeumorphicButton size="sm" iconOnly title="New project" onClick={handleNew} icon={<FilePlus2 size={14} />} />
           <NeumorphicButton size="sm" iconOnly title="Save project" onClick={handleSave} icon={<Save size={14} />} />
           <NeumorphicButton size="sm" iconOnly title="Open project" onClick={handleOpen} icon={<FolderOpen size={14} />} />
         </div>
