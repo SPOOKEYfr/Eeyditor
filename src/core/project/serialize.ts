@@ -7,7 +7,7 @@ import {
   type EffectInstance,
   type EffectKind,
   type EeyditorProject,
-  type ExportRange,
+  type ExportRange,  
   type HardwareAcceleration,
   type Interpolation,
   type Keyframe,
@@ -426,6 +426,9 @@ function normalizeSubtitle(value: unknown, path: string): SubtitleCue {
   }
   if (record.color !== undefined && typeof record.color === "string") {
     cue.color = record.color;
+  }
+  if (record.font !== undefined) {
+    cue.font = oneOf(record.font, ["sans", "serif", "mono"] as const, `${path}.font`, "sans");
   }
   return cue;
 }

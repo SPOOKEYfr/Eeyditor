@@ -405,4 +405,17 @@ describe("ffmpeg export pipeline", () => {
     expect(hidden).not.toContain("-c:a");
     expect(hidden).not.toContain("amix");
   });
+
+  it("applies per-cue font families in drawtext", () => {
+    const project = createEmptyProject();
+    project.subtitles = [
+      { id: "a", start: 0, end: 1, text: "one", font: "serif" },
+      { id: "b", start: 1, end: 2, text: "two", font: "mono" },
+      { id: "c", start: 2, end: 3, text: "three" },
+    ];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("font=DejaVu Serif");
+    expect(plan.filterComplex).toContain("font=DejaVu Sans Mono");
+    expect(plan.filterComplex.match(/font=DejaVu/g)).toHaveLength(2);
+  });
 });

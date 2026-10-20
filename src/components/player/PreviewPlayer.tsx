@@ -28,7 +28,7 @@ import {
   zoomFactor,
 } from "../../core/timeline/transitions";
 import { applyLutToRgba, cachedCube, lutEffect, lutPath, parseCube, rememberCube } from "../../core/effects/lut";
-import { subtitleBaseline, subtitleFontSize } from "../../core/subtitles/style";
+import { subtitleBaseline, subtitleFontStack, subtitleFontSize } from "../../core/subtitles/style";
 import { convertMediaUrl, invokeSafe, isTauri } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
 import type { BlendMode, MediaSource, SubtitleCue, TimelineClip, TimelineTrack } from "../../types/timeline";
@@ -288,7 +288,7 @@ function drawSubtitles(
   const lineHeight = fontSize * 1.25;
   const padding = fontSize * 0.4;
   ctx.save();
-  ctx.font = `600 ${fontSize}px Inter, system-ui, sans-serif`;
+  ctx.font = subtitleFontStack(cue, fontSize);
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
   const width = Math.max(...lines.map((line) => ctx.measureText(line).width));

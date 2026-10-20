@@ -282,6 +282,17 @@ export function MediaBin() {
               </button>
               <button
                 type="button"
+                title="Cycle font family"
+                onClick={() => {
+                  const next = cue.font === "serif" ? "mono" : cue.font === "mono" ? "sans" : "serif";
+                  editorStore.updateSubtitleCue(cue.id, (current) => ({ ...current, font: next }), "Restyled cue");
+                }}
+                className="w-6 text-center transition-colors hover:text-ink"
+              >
+                {cue.font === "serif" ? "serif" : cue.font === "mono" ? "mono" : "sans"}
+              </button>
+              <button
+                type="button"
                 title="Smaller text"
                 onClick={() =>
                   editorStore.updateSubtitleCue(

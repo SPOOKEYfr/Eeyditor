@@ -267,6 +267,7 @@ export interface ProjectMetadata {
 }
 
 export type SubtitlePosition = "bottom" | "center" | "top";
+export type SubtitleFont = "sans" | "serif" | "mono";
 
 export interface SubtitleCue {
   id: string;
@@ -281,6 +282,8 @@ export interface SubtitleCue {
   sizeScale?: number;
   /** CSS-style hex text colour. */
   color?: string;
+  /** Font family; falls back to the default sans stack. */
+  font?: SubtitleFont;
 }
 
 export interface ExportRange {

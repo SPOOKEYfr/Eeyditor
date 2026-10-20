@@ -48,13 +48,15 @@ describe("SRT subtitles", () => {
   it("round-trips per-cue style through save and load", () => {
     const project = createEmptyProject();
     project.subtitles = [
-      { id: "a", start: 0, end: 1, text: "one", position: "top", sizeScale: 1.4, color: "#FFB300" },
+      { id: "a", start: 0, end: 1, text: "one", position: "top", sizeScale: 1.4, color: "#FFB300", font: "serif" },
       { id: "b", start: 1, end: 2, text: "two" },
     ];
     const restored = parseProject(serializeProject(project));
     expect(restored.subtitles[0].position).toBe("top");
     expect(restored.subtitles[0].sizeScale).toBeCloseTo(1.4);
     expect(restored.subtitles[0].color).toBe("#FFB300");
+    expect(restored.subtitles[0].font).toBe("serif");
+    expect(restored.subtitles[1].font).toBeUndefined();
     expect(restored.subtitles[1].position).toBeUndefined();
   });
 });

@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-105%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-106%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -45,7 +45,7 @@ or missing (see [Known limits](#known-limits)).
 | Real waveforms (audio clips and audio-bearing video clips), track mixer, multi-select (shift/ctrl + marquee), clipboard | ✅ working |
 | Clip link groups (move/trim/split/delete together) | ✅ working |
 | Clip and track locking (blocks timeline edits) | ✅ working |
-| SRT subtitles with per-cue position, size and colour | ✅ working |
+| SRT subtitles with per-cue position, size, colour and font | ✅ working |
 | Timeline markers: ruler snap, Inspector jump/rename/delete | ✅ working |
 | Keyboard shortcut overlay (?, toolbar help button) | ✅ working |
 | In/out export range (timeline shading, `-ss`/`-t` trim) | ✅ working |
@@ -190,7 +190,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (105 tests)
+npm run test           # Vitest (106 tests)
 npm run e2e            # real FFmpeg renders through the export plan
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
@@ -203,7 +203,7 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 105 / 105 passed             |
+| `vitest run`         | 106 / 106 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
 | FFmpeg end-to-end    | 53 / 53 checks passed      |
@@ -245,8 +245,10 @@ audio-only MP3 preset, plus per-cue subtitle placement.
   and monitor LUT work happens on the capped preview scratch buffer.
 - Zoom transitions scale about the clip anchor with a simultaneous fade; the
   export scales the padded frame per frame rather than re-cropping the source.
-- Subtitles support per-cue vertical position, size scale and colour, but the
-  font family is fixed and there is no word-level animation.
+- Subtitles support per-cue vertical position, size scale, colour and a
+  serif/mono/sans font choice; other families and word-level animation are not
+  available. Font names resolve through fontconfig and fall back to the
+  default sans when missing.
 - Clip link groups are created manually; importing a file does not auto-split its
   audio into a linked track.
 - Reversed clips render backwards in the export; the monitor previews them as a
