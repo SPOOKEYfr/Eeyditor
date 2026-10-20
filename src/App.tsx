@@ -1,5 +1,6 @@
 import { TitleBar } from "./components/layout/TitleBar";
 import { ShortcutsOverlay } from "./components/layout/ShortcutsOverlay";
+import { RecoveryBanner } from "./components/layout/RecoveryBanner";
 import { Splash } from "./components/layout/Splash";
 import { MediaBin } from "./components/layout/MediaBin";
 import { Inspector } from "./components/layout/Inspector";
@@ -8,16 +9,19 @@ import { PreviewPlayer } from "./components/player/PreviewPlayer";
 import { Timeline } from "./components/timeline/Timeline";
 import { usePlaybackClock } from "./hooks/usePlaybackClock";
 import { useShortcuts } from "./hooks/useShortcuts";
+import { useAutosave } from "./hooks/useAutosave";
 
 export default function App() {
   usePlaybackClock();
   useShortcuts();
+  useAutosave();
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-canvas text-ink">
       <TitleBar />
       <Splash />
       <ShortcutsOverlay />
+      <RecoveryBanner />
       <main
         className="grid min-h-0 flex-1 gap-2 p-2"
         style={{

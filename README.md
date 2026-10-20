@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-98%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-100%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -49,6 +49,7 @@ or missing (see [Known limits](#known-limits)).
 | Timeline markers: ruler snap, Inspector jump/rename/delete | ✅ working |
 | Keyboard shortcut overlay (?, toolbar help button) | ✅ working |
 | In/out export range (timeline shading, `-ss`/`-t` trim) | ✅ working |
+| Autosave + restore prompt for unsaved sessions | ✅ working (localStorage) |
 | CI (typecheck, tests, build, cargo check) | ✅ configured |
 | Blend modes in monitor and export | ✅ working (13 modes) |
 | Animated GIF and audio-only MP3 export | ✅ working |
@@ -160,7 +161,7 @@ EeyditorProject
 │       ├─ volume: AudioEnvelope
 │       ├─ effects, transitionIn/Out, text
 ├─ media: MediaSource[]
-├─ markers, renderPreset, metadata
+├─ markers, renderPreset, exportRange, metadata
 ```
 
 ## Export pipeline
@@ -187,7 +188,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (98 tests)
+npm run test           # Vitest (100 tests)
 npm run e2e            # real FFmpeg renders through the export plan
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
@@ -200,7 +201,7 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 98 / 98 passed             |
+| `vitest run`         | 100 / 100 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
 | FFmpeg end-to-end    | 51 / 51 checks passed      |
