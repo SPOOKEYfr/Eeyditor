@@ -160,6 +160,14 @@ export function Timeline() {
     observer.observe(wrap);
 
     const draw = () => {
+      // Keep the playhead on screen: chase it during playback, reveal it when
+      // it is jumped (Home/End/markers) while paused.
+      const state = editorStore.getState();
+      const playheadX = state.playhead * state.zoom - state.scroll;
+      if (playheadX > width * (state.playing ? 0.85 : 1.02) || playheadX < -2) {
+        const anchor = state.playing ? 0.2 : 0.35;
+        editorStore.setScroll(Math.max(0, state.playhead * state.zoom - width * anchor));
+      }
       const ctx = canvas.getContext("2d");
       if (ctx)
         renderTimeline(
