@@ -510,5 +510,32 @@ describe("live export-range adjustment", () => {
     expect(editorStore.getState().past).toHaveLength(1);
   });
 });
+
+
+describe("marker management", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+    editorStore.updateProject((project) => ({ ...project, duration: 20 }), "seed");
+    editorStore.addMarker(5);
+  });
+
+  it("moves and clamps markers", () => {
+    const id = editorStore.getState().project.markers[0].id;
+    editorStore.moveMarker(id, 9);
+    expect(editorStore.getState().project.markers[0].time).toBe(9);
+    editorStore.moveMarkerLive(id, -4);
+    expect(editorStore.getState().project.markers[0].time).toBe(0);
+    editorStore.moveMarkerLive(id, 99);
+    expect(editorStore.getState().project.markers[0].time).toBe(20);
+  });
+
+  it("renames and removes markers", () => {
+    const id = editorStore.getState().project.markers[0].id;
+    editorStore.renameMarker(id, "Drop");
+    expect(editorStore.getState().project.markers[0].label).toBe("Drop");
+    editorStore.removeMarker(id);
+    expect(editorStore.getState().project.markers).toHaveLength(0);
+  });
+});
 });
 

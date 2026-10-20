@@ -281,12 +281,17 @@ export function Timeline() {
             return;
           }
         }
-        dragRef.current = { mode: "playhead" };
         const time = pointerToTime(event.clientX);
         const hit = state.project.markers.find(
           (marker) => Math.abs(timeToX(marker.time, state.zoom, state.scroll) - x) < 6,
         );
-        editorStore.setPlayhead(hit ? hit.time : time);
+        if (hit) {
+          editorStore.beginInteraction();
+          dragRef.current = { mode: "marker", markerId: hit.id };
+          return;
+        }
+        dragRef.current = { mode: "playhead" };
+        editorStore.setPlayhead(time);
         return;
       }
 
@@ -392,6 +397,9 @@ export function Timeline() {
         editorStore.trimClipLive(drag.clipId, "start", time);
       } else if (drag.mode === "trim-end" && drag.clipId) {
         editorStore.trimClipLive(drag.clipId, "end", time);
+      } else if (drag.mode === "marker" && drag.markerId) {
+        const clamped = Math.max(0, Math.min(time, editorStore.getState().project.duration));
+        editorStore.moveMarkerLive(drag.markerId, clamped);
       } else if (drag.mode === "range-start" || drag.mode === "range-end") {
         const state = editorStore.getState();
         const current = state.project.exportRange;
@@ -505,9 +513,11 @@ export function Timeline() {
       const label =
         drag.mode === "move"
           ? "Moved clip"
-          : drag.mode.startsWith("range-")
-            ? "Adjusted export range"
-            : "Trimmed clip";
+          : drag.mode === "marker"
+            ? "Moved marker"
+            : drag.mode.startsWith("range-")
+              ? "Adjusted export range"
+              : "Trimmed clip";
       editorStore.commitInteraction(label);
     }
   }, []);
@@ -594,8 +604,17 @@ interface DropPreview {
 }
 
 interface DragState {
-  mode: "playhead" | "move" | "trim-start" | "trim-end" | "marquee" | "range-start" | "range-end";
+  mode:
+    | "playhead"
+    | "move"
+    | "trim-start"
+    | "trim-end"
+    | "marquee"
+    | "range-start"
+    | "range-end"
+    | "marker";
   clipId?: string;
+  markerId?: string;
   grabOffset?: number;
   trackId?: string;
   x0?: number;

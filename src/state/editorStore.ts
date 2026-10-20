@@ -1057,6 +1057,30 @@ class EditorStore {
     }), "Removed marker");
   }
 
+  /** Reposition a marker; clamped to [0, duration]. */
+  moveMarker(markerId: string, time: number): void {
+    this.updateProject((project) => ({
+      ...project,
+      markers: project.markers.map((marker) =>
+        marker.id === markerId
+          ? { ...marker, time: Math.max(0, Math.min(time, project.duration)) }
+          : marker,
+      ),
+    }), "Moved marker");
+  }
+
+  /** Live marker drag (undo pooled at commitInteraction). */
+  moveMarkerLive(markerId: string, time: number): void {
+    this.updateProjectLive((project) => ({
+      ...project,
+      markers: project.markers.map((marker) =>
+        marker.id === markerId
+          ? { ...marker, time: Math.max(0, Math.min(time, project.duration)) }
+          : marker,
+      ),
+    }), "Moved marker");
+  }
+
   renameMarker(markerId: string, label: string): void {
     this.updateProject((project) => ({
       ...project,
