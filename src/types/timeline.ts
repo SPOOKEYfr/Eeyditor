@@ -76,6 +76,11 @@ export type TransitionKind =
   | "slide"
   | "zoom";
 
+export interface SpeedPoint {
+  time: number;
+  speed: number;
+}
+
 export type HardwareAcceleration =
   | "cpu"
   | "nvenc"
@@ -194,8 +199,12 @@ export interface TimelineClip {
   inPoint: number;
   /** Source-relative out point in seconds. */
   outPoint: number;
-  /** Playback rate multiplier; 1 is realtime. */
+  /** Playback rate multiplier; 1 is realtime. Baseline when speedCurve is empty. */
   speed: number;
+  /** Piecewise-constant speed ramp (CapCut-style speed curve). Points are
+   *  clip-local times in seconds with the speed that applies from that point
+   *  until the next point. The first point should start at time 0. */
+  speedCurve?: SpeedPoint[];
   reversed: boolean;
   transform: Transform;
   volume: AudioEnvelope;

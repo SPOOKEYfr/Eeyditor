@@ -6,6 +6,7 @@ import {
   type KeyframeCurve,
   type ExportRange,
   type SubtitleCue,
+  type SpeedPoint,
   type TimelineClip,
   type TimelineTrack,
   type TrackType,
@@ -276,6 +277,16 @@ class EditorStore {
         },
       };
     }, `Set ${edge} transition`);
+  }
+
+  /** Replace a clip's speed curve (piecewise-constant speed ramp). */
+  setClipSpeedCurve(clipId: string, points: SpeedPoint[]): void {
+    this.updateClip(clipId, (clip) => ({
+      ...clip,
+      speedCurve: points
+        .filter((p) => Number.isFinite(p.speed) && p.speed > 0 && p.time >= 0)
+        .sort((a, b) => a.time - b.time),
+    }), "Set speed curve");
   }
 
   /** CapCut-style crossfade between two touching clips on the same track. */

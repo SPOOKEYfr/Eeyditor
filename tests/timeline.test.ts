@@ -10,11 +10,14 @@ import {
   snapTime,
   snapToFrame,
   splitClip,
+  sourceOffsetFor,
+  clipSegments,
   timeToX,
   trimClip,
   xToTime,
 } from "../src/core/timeline/engine";
-import { createClip, createTrack } from "../src/core/project/factory";
+import { createClip, createTrack, createEmptyProject } from "../src/core/project/factory";
+import { editorStore } from "../src/state/editorStore";
 
 function clipAt(trackId: string, start: number, duration: number, name = "Clip") {
   return createClip({ trackId, start, duration, name });
@@ -110,5 +113,59 @@ describe("timeline engine", () => {
 
   it("creates tracks with type-specific heights", () => {
     expect(createTrack("video", 0).height).not.toBe(createTrack("audio", 0).height);
+  });
+});
+
+describe("speed curves", () => {
+  it("sourceOffsetFor uses constant speed when there is no curve", () => {
+    const clip = createClip({ trackId: "t", start: 0, duration: 6, kind: "video" });
+    clip.speed = 2;
+    expect(sourceOffsetFor(clip, 3)).toBe(6);
+    expect(sourceOffsetFor(clip, 6)).toBe(12);
+  });
+
+  it("sourceOffsetFor integrates a piecewise-constant speed curve", () => {
+    const clip = createClip({
+      trackId: "t",
+      start: 0,
+      duration: 6,
+      kind: "video",
+      inPoint: 10,
+    });
+    clip.speedCurve = [{ time: 0, speed: 1 }, { time: 2, speed: 4 }];
+    expect(sourceOffsetFor(clip, 1)).toBe(1);
+    expect(sourceOffsetFor(clip, 3)).toBe(2 + 4);
+    expect(sourceOffsetFor(clip, 6)).toBe(2 + 16);
+    const flat = { ...clip, speedCurve: [] };
+    expect(sourceOffsetFor(flat, 6)).toBe(6);
+  });
+
+  it("clipSegments splits at curve points with correct source ranges", () => {
+    const clip = createClip({ trackId: "t", start: 0, duration: 4, kind: "video", inPoint: 5 });
+    clip.speed = 2;
+    expect(clipSegments(clip)).toEqual([
+      { t0: 0, t1: 4, speed: 2, srcStart: 5, srcEnd: 13 },
+    ]);
+    const curved = { ...clip, speedCurve: [{ time: 0, speed: 1 }, { time: 2, speed: 4 }] };
+    expect(clipSegments(curved)).toEqual([
+      { t0: 0, t1: 2, speed: 1, srcStart: 5, srcEnd: 7 },
+      { t0: 2, t1: 4, speed: 4, srcStart: 7, srcEnd: 15 },
+    ]);
+  });
+
+  it("setClipSpeedCurve persists and normalizes points", () => {
+    editorStore.loadProject(createEmptyProject());
+    const video = editorStore.getState().project.tracks.find((track) => track.type === "video")!;
+    const clip = createClip({ trackId: video.id, start: 0, duration: 4, kind: "video" });
+    editorStore.updateProject(
+      (project) => ({
+        ...project,
+        tracks: project.tracks.map((track) => (track.id === video.id ? { ...track, clips: [clip] } : track)),
+      }),
+      "add clip",
+    );
+    editorStore.setClipSpeedCurve(clip.id, [{ time: 2, speed: 4 }, { time: 0, speed: 1 }]);
+    const stored = editorStore.getState().project.tracks.flatMap((track) => track.clips)[0];
+    expect(stored.speedCurve).toEqual([{ time: 0, speed: 1 }, { time: 2, speed: 4 }]);
   });
 });

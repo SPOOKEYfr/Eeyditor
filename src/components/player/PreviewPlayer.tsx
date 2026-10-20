@@ -11,6 +11,7 @@ import {
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { evaluateCurve } from "../../core/keyframes/bezier";
 import { dbToGain, evaluateEnvelope } from "../../core/audio/waveform";
+import { sourceOffsetFor } from "../../core/timeline/engine";
 import {
   applyChromaKey,
   applySharpen,
@@ -383,14 +384,17 @@ function syncPlayable(
       : Number.POSITIVE_INFINITY;
   const limit = Math.max(0, sourceDuration - 0.02);
   const reversed = clip.reversed;
+  const hasCurve = clip.speedCurve && clip.speedCurve.length > 0;
+  const offset = hasCurve ? sourceOffsetFor(clip, local) : local * rate;
+  const totalOffset = hasCurve ? sourceOffsetFor(clip, clip.duration) : clip.duration * rate;
   const target = reversed
-    ? Math.min(Math.max(0, clip.inPoint + (clip.duration - local) * rate), limit)
-    : Math.min(Math.max(0, clip.inPoint + local * rate), limit);
+    ? Math.min(Math.max(0, clip.inPoint + totalOffset - offset), limit)
+    : Math.min(Math.max(0, clip.inPoint + offset), limit);
 
-  element.playbackRate = rate;
-  if (reversed) {
-    // Browsers cannot decode audio backwards, so a reversed clip previews as a
-    // muted frame scrub: the element stays paused and seeks each painted frame.
+  element.playbackRate = hasCurve ? 1 : rate;
+  if (reversed || hasCurve) {
+    // Variable-speed and reversed clips preview as a muted frame scrub:
+    // the element stays paused and seeks each painted frame.
     if (!element.paused) element.pause();
     if (Math.abs(element.currentTime - target) > 0.02 && now - entry.lastSeek > 55) {
       element.currentTime = target;

@@ -9,7 +9,7 @@ import type {
   TrackType,
 } from "../../types/timeline";
 import { evaluateCurve } from "../keyframes/bezier";
-import { clipEnd, exportRange } from "../timeline/engine";
+import { clipEnd, clipSegments, exportRange } from "../timeline/engine";
 import { subtitleBaseline, subtitleFontFamily, subtitleFontSize } from "../subtitles/style";
 import {
   hasTransition,
@@ -31,6 +31,12 @@ export interface FfmpegPlan {
 
 const TRANSPARENT_BG = "black@0.0";
 const VIDEO_TRACKS: TrackType[] = ["video", "overlay", "effects", "text", "adjustment"];
+
+/** Rebase a filter expression built on clip-local `t` so it evaluates against
+ *  segment-local time starting at `segT0` seconds into the clip. */
+function offsetTimeExpr(expr: string, segT0: number): string {
+  return expr.replace(/\bt\b/g, `(t+${f(segT0)})`);
+}
 
 function f(value: number): string {
   if (!Number.isFinite(value)) return "0";
@@ -292,88 +298,140 @@ export function buildFfmpegPlan(
     if (entry.videoIndex === undefined) continue;
     if (entry.track.hidden) continue;
     const { clip } = entry;
-    const chain: string[] = [];
     const inputLabel = `[${entry.videoIndex}:v]`;
-
-    chain.push(`trim=start=${f(Math.max(0, clip.inPoint))}:end=${f(clip.inPoint + clip.duration * clip.speed)}`);
-    if (clip.reversed) chain.push("reverse");
-    chain.push("setpts=PTS-STARTPTS");
-    if (clip.speed !== 1 && clip.speed > 0) {
-      chain.push(`setpts=PTS/${f(clip.speed)}`);
-    }
-    chain.push(`fps=${f(fps)}`);
-
-    if (clip.kind === "text") {
-      chain.push(buildDrawText(clip));
-    } else {
-      chain.push(
-        `scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease:eval=frame`,
-      );
-      chain.push(
-        `pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2:color=${TRANSPARENT_BG}`,
-      );
-      const sx = staticOrExpression(clip.transform.scaleX, fps);
-      const sy = staticOrExpression(clip.transform.scaleY, fps);
-      if (clip.transform.scaleX.keyframes.length || clip.transform.scaleY.keyframes.length) {
-        chain.push(`scale=${escapeFilterGraph(`iw*(${sx})`)}:${escapeFilterGraph(`ih*(${sy})`)}:eval=frame`);
-      } else if (clip.transform.scaleX.defaultValue !== 1 || clip.transform.scaleY.defaultValue !== 1) {
-        chain.push(`scale=iw*${f(clip.transform.scaleX.defaultValue)}:ih*${f(clip.transform.scaleY.defaultValue)}`);
-      }
-      const rotation = staticOrExpression(clip.transform.rotation, fps);
-      if (clip.transform.rotation.keyframes.length || clip.transform.rotation.defaultValue !== 0) {
-        chain.push(
-          `rotate=${escapeFilterGraph(`${rotation}*PI/180`)}:c=none:ow=rotw(iw):oh=roth(ih)`,
-        );
-      }
-      // Effects layers.
-      for (const effect of clip.effects) {
-        if (!effect.enabled) continue;
-        const filter = effectFilter(effect.kind, effect.amount, effect.params);
-        if (filter) chain.push(filter);
-      }
-    }
-
-    chain.push("format=rgba");
     const opacityCurve = clip.transform.opacity;
     const transitionExpr = transitionExpression(clip);
     const wipeExpr = wipeExpression(clip);
     const animatedOpacity =
       (opacityCurve.keyframes.length > 0 || transitionExpr !== null || wipeExpr !== null) &&
       entry.opacityMaskIndex !== undefined;
-    if (!animatedOpacity) {
-      // colorchannelmixer only accepts a constant alpha; animated opacity uses
-      // a bounded-size luma mask (below) so the per-pixel cost stays constant.
-      if (opacityCurve.defaultValue !== 1) {
-        chain.push(`colorchannelmixer=aa=${f(opacityCurve.defaultValue)}`);
-      }
-      chain.push(`setpts=PTS+${f(clip.start)}/TB`);
-    }
+    const hasCurve = clip.speedCurve && clip.speedCurve.length > 0;
+    const useSegments = hasCurve && !clip.reversed && !animatedOpacity && clip.kind !== "text";
+    const zoomExpr = useSegments ? null : zoomScaleExpression(clip, `(t-${f(clip.start)})`);
 
     const label = `vc${videoCounter++}`;
-    const zoomExpr = zoomScaleExpression(clip, `(t-${f(clip.start)})`);
-    const staged = zoomExpr ? `${label}raw` : label;
-    if (animatedOpacity && entry.opacityMaskIndex !== undefined) {
-      const base = piecewiseLinearExpression(opacityCurve, fps);
-      const factors = [base, transitionExpr, wipeExpr].filter(
-        (part): part is string => Boolean(part),
-      );
-      const combined = `min(1,max(0,${factors.map((part) => `(${part})`).join("*")}))`;
-      const exprT = combined.replace(/\bt\b/g, "T");
-      const lum = escapeFilterGraph(`min(1,max(0,(${exprT})))*255`);
-      filters.push(`${inputLabel}${chain.join(",")}[${staged}m]`);
-      filters.push(
-        `[${entry.opacityMaskIndex}:v]format=gray,geq=lum=${lum},scale=${preset.width}:${preset.height}:flags=bilinear,format=gray[${staged}k]`,
-      );
-      filters.push(
-        `[${staged}m][${staged}k]alphamerge,setpts=PTS+${f(clip.start)}/TB[${staged}]`,
-      );
+    let staged: string | undefined;
+
+    if (useSegments) {
+      const segs = clipSegments(clip);
+      const segLabels: string[] = [];
+      for (const seg of segs) {
+        const schain: string[] = [];
+        schain.push(`trim=start=${f(Math.max(0, seg.srcStart))}:end=${f(seg.srcEnd)}`);
+        schain.push("setpts=PTS-STARTPTS");
+        if (seg.speed !== 1 && seg.speed > 0) {
+          schain.push(`setpts=PTS/${f(seg.speed)}`);
+        }
+        schain.push(`fps=${f(fps)}`);
+        if (clip.kind === "text") {
+          schain.push(buildDrawText(clip));
+        } else {
+          schain.push(
+            `scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease:eval=frame`,
+          );
+          schain.push(
+            `pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2:color=${TRANSPARENT_BG}`,
+          );
+          let sx = offsetTimeExpr(staticOrExpression(clip.transform.scaleX, fps), seg.t0);
+          let sy = offsetTimeExpr(staticOrExpression(clip.transform.scaleY, fps), seg.t0);
+          if (clip.transform.scaleX.keyframes.length || clip.transform.scaleY.keyframes.length) {
+            schain.push(`scale=${escapeFilterGraph(`iw*(${sx})`)}:${escapeFilterGraph(`ih*(${sy})`)}:eval=frame`);
+          } else if (clip.transform.scaleX.defaultValue !== 1 || clip.transform.scaleY.defaultValue !== 1) {
+            schain.push(`scale=iw*${f(clip.transform.scaleX.defaultValue)}:ih*${f(clip.transform.scaleY.defaultValue)}`);
+          }
+          const rotation = offsetTimeExpr(staticOrExpression(clip.transform.rotation, fps), seg.t0);
+          if (clip.transform.rotation.keyframes.length || clip.transform.rotation.defaultValue !== 0) {
+            schain.push(
+              `rotate=${escapeFilterGraph(`${rotation}*PI/180`)}:c=none:ow=rotw(iw):oh=roth(ih)`,
+            );
+          }
+          for (const effect of clip.effects) {
+            if (!effect.enabled) continue;
+            const filter = effectFilter(effect.kind, effect.amount, effect.params);
+            if (filter) schain.push(filter);
+          }
+        }
+        schain.push("format=rgba");
+        const slabel = `vc${videoCounter++}`;
+        segLabels.push(`[${slabel}]`);
+        filters.push(`${inputLabel}${schain.join(",")}[${slabel}]`);
+      }
+      filters.push(`${segLabels.join("")}concat=n=${segLabels.length}:v=1:a=0[${label}]`);
+      staged = label;
     } else {
-      filters.push(`${inputLabel}${chain.join(",")}[${staged}]`);
-    }
-    if (zoomExpr) {
-      filters.push(
-        `[${staged}]scale=w=${escapeFilterGraph(`iw*(${zoomExpr})`)}:h=${escapeFilterGraph(`ih*(${zoomExpr})`)}:eval=frame[${label}]`,
-      );
+      const chain: string[] = [];
+      chain.push(`trim=start=${f(Math.max(0, clip.inPoint))}:end=${f(clip.inPoint + clip.duration * clip.speed)}`);
+      if (clip.reversed) chain.push("reverse");
+      chain.push("setpts=PTS-STARTPTS");
+      if (clip.speed !== 1 && clip.speed > 0) {
+        chain.push(`setpts=PTS/${f(clip.speed)}`);
+      }
+      chain.push(`fps=${f(fps)}`);
+
+      if (clip.kind === "text") {
+        chain.push(buildDrawText(clip));
+      } else {
+        chain.push(
+          `scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease:eval=frame`,
+        );
+        chain.push(
+          `pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2:color=${TRANSPARENT_BG}`,
+        );
+        const sx = staticOrExpression(clip.transform.scaleX, fps);
+        const sy = staticOrExpression(clip.transform.scaleY, fps);
+        if (clip.transform.scaleX.keyframes.length || clip.transform.scaleY.keyframes.length) {
+          chain.push(`scale=${escapeFilterGraph(`iw*(${sx})`)}:${escapeFilterGraph(`ih*(${sy})`)}:eval=frame`);
+        } else if (clip.transform.scaleX.defaultValue !== 1 || clip.transform.scaleY.defaultValue !== 1) {
+          chain.push(`scale=iw*${f(clip.transform.scaleX.defaultValue)}:ih*${f(clip.transform.scaleY.defaultValue)}`);
+        }
+        const rotation = staticOrExpression(clip.transform.rotation, fps);
+        if (clip.transform.rotation.keyframes.length || clip.transform.rotation.defaultValue !== 0) {
+          chain.push(
+            `rotate=${escapeFilterGraph(`${rotation}*PI/180`)}:c=none:ow=rotw(iw):oh=roth(ih)`,
+          );
+        }
+        // Effects layers.
+        for (const effect of clip.effects) {
+          if (!effect.enabled) continue;
+          const filter = effectFilter(effect.kind, effect.amount, effect.params);
+          if (filter) chain.push(filter);
+        }
+      }
+
+      chain.push("format=rgba");
+      if (!animatedOpacity) {
+        // colorchannelmixer only accepts a constant alpha; animated opacity uses
+        // a bounded-size luma mask (below) so the per-pixel cost stays constant.
+        if (opacityCurve.defaultValue !== 1) {
+          chain.push(`colorchannelmixer=aa=${f(opacityCurve.defaultValue)}`);
+        }
+        chain.push(`setpts=PTS+${f(clip.start)}/TB`);
+      }
+
+      staged = zoomExpr ? `${label}raw` : label;
+      if (animatedOpacity && entry.opacityMaskIndex !== undefined) {
+        const base = piecewiseLinearExpression(opacityCurve, fps);
+        const factors = [base, transitionExpr, wipeExpr].filter(
+          (part): part is string => Boolean(part),
+        );
+        const combined = `min(1,max(0,${factors.map((part) => `(${part})`).join("*")}))`;
+        const exprT = combined.replace(/\bt\b/g, "T");
+        const lum = escapeFilterGraph(`min(1,max(0,(${exprT})))*255`);
+        filters.push(`${inputLabel}${chain.join(",")}[${staged}m]`);
+        filters.push(
+          `[${entry.opacityMaskIndex}:v]format=gray,geq=lum=${lum},scale=${preset.width}:${preset.height}:flags=bilinear,format=gray[${staged}k]`,
+        );
+        filters.push(
+          `[${staged}m][${staged}k]alphamerge,setpts=PTS+${f(clip.start)}/TB[${staged}]`,
+        );
+      } else {
+        filters.push(`${inputLabel}${chain.join(",")}[${staged}]`);
+      }
+      if (zoomExpr) {
+        filters.push(
+          `[${staged}]scale=w=${escapeFilterGraph(`iw*(${zoomExpr})`)}:h=${escapeFilterGraph(`ih*(${zoomExpr})`)}:eval=frame[${label}]`,
+        );
+      }
     }
 
     // Partial-strength LUT: grade a copy and blend it back over the source so
@@ -461,47 +519,103 @@ export function buildFfmpegPlan(
     if (entry.audioIndex === undefined) continue;
     if (entry.track.hidden || !audibleTrack(entry.track)) continue;
     const { clip } = entry;
-    const chain: string[] = [];
-    chain.push(
-      `atrim=start=${f(Math.max(0, clip.inPoint))}:end=${f(clip.inPoint + clip.duration * clip.speed)}`,
-    );
-    if (clip.reversed) chain.push("areverse");
-    chain.push("asetpts=PTS-STARTPTS");
-    const tempo = atempoChain(clip.speed);
-    if (tempo) chain.push(tempo);
-    if (entry.track.volume !== 0) chain.push(`volume=${f(entry.track.volume)}dB`);
-    if (clip.volume.gainDb !== 0) chain.push(`volume=${f(clip.volume.gainDb)}dB`);
-    if (clip.volume.keyframes.length) {
-      const volumeExpr = piecewiseLinearExpression(
-        { property: "volume", defaultValue: clip.volume.gainDb, keyframes: clip.volume.keyframes },
-        fps,
+    const hasCurve = clip.speedCurve && clip.speedCurve.length > 0;
+    if (hasCurve && !clip.reversed) {
+      const segs = clipSegments(clip);
+      const segLabels: string[] = [];
+      for (const seg of segs) {
+        const schain: string[] = [];
+        schain.push(`atrim=start=${f(Math.max(0, seg.srcStart))}:end=${f(seg.srcEnd)}`);
+        schain.push("asetpts=PTS-STARTPTS");
+        const tempo = atempoChain(seg.speed);
+        if (tempo) schain.push(tempo);
+        if (entry.track.volume !== 0) schain.push(`volume=${f(entry.track.volume)}dB`);
+        if (clip.volume.gainDb !== 0) schain.push(`volume=${f(clip.volume.gainDb)}dB`);
+        if (clip.volume.keyframes.length) {
+          const volumeExpr = offsetTimeExpr(
+            piecewiseLinearExpression(
+              { property: "volume", defaultValue: clip.volume.gainDb, keyframes: clip.volume.keyframes },
+              fps,
+            ),
+            seg.t0,
+          );
+          schain.push(`volume=volume=${escapeFilterGraph(`(${volumeExpr})/20`)}:eval=frame`);
+        }
+        const segDur = seg.t1 - seg.t0;
+        const isFirst = seg.t0 === 0;
+        const isLast = seg.t1 >= clip.duration;
+        if (isFirst && clip.volume.fadeIn > 0) {
+          schain.push(`afade=t=in:st=0:d=${f(clip.volume.fadeIn)}`);
+        }
+        if (isLast && clip.volume.fadeOut > 0) {
+          const start = Math.max(0, segDur - clip.volume.fadeOut);
+          schain.push(`afade=t=out:st=${f(start)}:d=${f(clip.volume.fadeOut)}`);
+        }
+        if (isFirst) {
+          const audioFadeIn = transitionInDuration(clip);
+          if (audioFadeIn > 0) schain.push(`afade=t=in:st=0:d=${f(audioFadeIn)}`);
+          const audioFadeOut = transitionOutDuration(clip);
+          if (audioFadeOut > 0 && isLast) {
+            const start = Math.max(0, segDur - audioFadeOut);
+            schain.push(`afade=t=out:st=${f(start)}:d=${f(audioFadeOut)}`);
+          }
+        }
+        schain.push("aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo");
+        const slabel = `ac${audioCounter++}`;
+        segLabels.push(`[${slabel}]`);
+        filters.push(`[${entry.audioIndex}:a]${schain.join(",")}[${slabel}]`);
+      }
+      const alabel = `ac${audioCounter++}`;
+      filters.push(`${segLabels.join("")}concat=n=${segLabels.length}:v=0:a=1[${alabel}]`);
+      if (clip.start > 0) {
+        const delayMs = Math.round(clip.start * 1000);
+        filters.push(`[${alabel}]adelay=${delayMs}|${delayMs}[${alabel}]`);
+      }
+      audioLabels.push(`[${alabel}]`);
+    } else {
+      const chain: string[] = [];
+      chain.push(
+        `atrim=start=${f(Math.max(0, clip.inPoint))}:end=${f(clip.inPoint + clip.duration * clip.speed)}`,
       );
-      chain.push(`volume=volume=${escapeFilterGraph(`(${volumeExpr})/20`)}:eval=frame`);
+      if (clip.reversed) chain.push("areverse");
+      chain.push("asetpts=PTS-STARTPTS");
+      const tempo = atempoChain(clip.speed);
+      if (tempo) chain.push(tempo);
+      if (entry.track.volume !== 0) chain.push(`volume=${f(entry.track.volume)}dB`);
+      if (clip.volume.gainDb !== 0) chain.push(`volume=${f(clip.volume.gainDb)}dB`);
+      if (clip.volume.keyframes.length) {
+        const volumeExpr = piecewiseLinearExpression(
+          { property: "volume", defaultValue: clip.volume.gainDb, keyframes: clip.volume.keyframes },
+          fps,
+        );
+        chain.push(`volume=volume=${escapeFilterGraph(`(${volumeExpr})/20`)}:eval=frame`);
+      }
+      if (clip.volume.fadeIn > 0) {
+        chain.push(`afade=t=in:st=0:d=${f(clip.volume.fadeIn)}`);
+      }
+      if (clip.volume.fadeOut > 0) {
+        const start = Math.max(0, clip.duration - clip.volume.fadeOut);
+        const audioFadeOut = transitionOutDuration(clip);
+        chain.push(`afade=t=out:st=${f(start)}:d=${f(audioFadeOut)}`);
+      }
+      const audioFadeIn = transitionInDuration(clip);
+      if (audioFadeIn > 0) {
+        chain.push(`afade=t=in:st=0:d=${f(audioFadeIn)}`);
+      }
+      const audioFadeOut = transitionOutDuration(clip);
+      if (audioFadeOut > 0) {
+        const start = Math.max(0, clip.duration - audioFadeOut);
+        chain.push(`afade=t=out:st=${f(start)}:d=${f(audioFadeOut)}`);
+      }
+      if (clip.start > 0) {
+        const delayMs = Math.round(clip.start * 1000);
+        chain.push(`adelay=${delayMs}|${delayMs}`);
+      }
+      chain.push("aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo");
+      const label = `ac${audioCounter++}`;
+      filters.push(`[${entry.audioIndex}:a]${chain.join(",")}[${label}]`);
+      audioLabels.push(`[${label}]`);
     }
-    if (clip.volume.fadeIn > 0) {
-      chain.push(`afade=t=in:st=0:d=${f(clip.volume.fadeIn)}`);
-    }
-    if (clip.volume.fadeOut > 0) {
-      const start = Math.max(0, clip.duration - clip.volume.fadeOut);
-      chain.push(`afade=t=out:st=${f(start)}:d=${f(clip.volume.fadeOut)}`);
-    }
-    const audioFadeIn = transitionInDuration(clip);
-    if (audioFadeIn > 0) {
-      chain.push(`afade=t=in:st=0:d=${f(audioFadeIn)}`);
-    }
-    const audioFadeOut = transitionOutDuration(clip);
-    if (audioFadeOut > 0) {
-      const start = Math.max(0, clip.duration - audioFadeOut);
-      chain.push(`afade=t=out:st=${f(start)}:d=${f(audioFadeOut)}`);
-    }
-    if (clip.start > 0) {
-      const delayMs = Math.round(clip.start * 1000);
-      chain.push(`adelay=${delayMs}|${delayMs}`);
-    }
-    chain.push("aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo");
-    const label = `ac${audioCounter++}`;
-    filters.push(`[${entry.audioIndex}:a]${chain.join(",")}[${label}]`);
-    audioLabels.push(`[${label}]`);
   }
 
   if (audioOnly) filters.push("[vout]nullsink");

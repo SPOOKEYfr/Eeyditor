@@ -46,6 +46,78 @@ export function formatTimecode(seconds: number, fps: number): string {
   return `${pad(hours)}:${pad(mins)}:${pad(secs)}:${pad(frames)}`;
 }
 
+/** Source-relative offset (in seconds) consumed from the clip's in point at a
+ *  clip-local time, honouring the speed curve (piecewise-constant playback
+ *  rate). Returns source seconds, not timeline seconds. */
+export function sourceOffsetFor(clip: TimelineClip, localTime: number): number {
+  const t = Math.max(0, localTime);
+  const curve = (clip.speedCurve ?? [])
+    .filter((p) => Number.isFinite(p.speed) && p.speed > 0 && p.time >= 0)
+    .sort((a, b) => a.time - b.time);
+  let acc = 0;
+  let prev = 0;
+  let rate = clip.speed || 1;
+  for (const point of curve) {
+    const end = Math.min(point.time, t);
+    if (end > prev) acc += (end - prev) * rate;
+    if (point.time >= t) return acc;
+    prev = point.time;
+    rate = point.speed;
+  }
+  if (t > prev) acc += (t - prev) * rate;
+  return acc;
+}
+
+/** Source-relative span [inPoint, end] the clip consumes over its whole duration. */
+export function clipSourceSpan(clip: TimelineClip): { start: number; end: number } {
+  return { start: clip.inPoint, end: clip.inPoint + sourceOffsetFor(clip, clip.duration) };
+}
+
+/** Split a clip into constant-speed segments at its speed-curve points.
+ *  Each segment covers [t0, t1] of clip-local time at a fixed playback rate,
+ *  and maps to source range [srcStart, srcEnd]. Falls back to one segment
+ *  covering the whole clip at `clip.speed` when there is no curve. */
+export function clipSegments(clip: TimelineClip): Array<{
+  t0: number;
+  t1: number;
+  speed: number;
+  srcStart: number;
+  srcEnd: number;
+}> {
+  const curve = (clip.speedCurve ?? [])
+    .filter((p) => Number.isFinite(p.speed) && p.speed > 0 && p.time >= 0 && p.time <= clip.duration)
+    .sort((a, b) => a.time - b.time);
+  const segments: Array<{ t0: number; t1: number; speed: number; srcStart: number; srcEnd: number }> = [];
+  let t0 = 0;
+  let src = clip.inPoint;
+  let rate = clip.speed || 1;
+  for (const point of curve) {
+    const t1 = Math.min(point.time, clip.duration);
+    if (t1 > t0) {
+      const nextSrc = src + (t1 - t0) * rate;
+      segments.push({ t0, t1, speed: rate, srcStart: src, srcEnd: nextSrc });
+      src = nextSrc;
+      t0 = t1;
+    }
+    if (point.time >= clip.duration) break;
+    rate = point.speed;
+    t0 = point.time;
+  }
+  if (t0 < clip.duration) {
+    segments.push({
+      t0,
+      t1: clip.duration,
+      speed: rate,
+      srcStart: src,
+      srcEnd: src + (clip.duration - t0) * rate,
+    });
+  }
+  if (segments.length === 0) {
+    segments.push({ t0: 0, t1: clip.duration, speed: clip.speed || 1, srcStart: clip.inPoint, srcEnd: clip.inPoint + clip.duration * (clip.speed || 1) });
+  }
+  return segments;
+}
+
 export function parseTimecode(text: string, fps: number): number | null {
   const match = text.trim().match(/^(\d{1,3}):(\d{1,2}):(\d{1,2})[:;](\d{1,3})$/);
   if (!match) return null;
@@ -210,15 +282,15 @@ function trimDuration(
   duration: number,
   isRightPiece = false,
 ): TimelineClip {
-  const speed = clip.speed || 1;
-  const inPoint = clip.inPoint + offsetFromClipStart * speed;
+  const inOffset = sourceOffsetFor(clip, offsetFromClipStart);
+  const endOffset = sourceOffsetFor(clip, offsetFromClipStart + duration);
   const next: TimelineClip = {
     ...clip,
     id: isRightPiece ? makeId("clip") : clip.id,
     start: clip.start + offsetFromClipStart,
     duration,
-    inPoint,
-    outPoint: inPoint + duration * speed,
+    inPoint: clip.inPoint + inOffset,
+    outPoint: clip.inPoint + endOffset,
   };
   return next;
 }
@@ -260,23 +332,24 @@ export function trimClip(
     const maxStart = clip.start + clip.duration - minDuration;
     const nextStart = clamp(newTime, 0, maxStart);
     const delta = nextStart - clip.start;
-    const speed = clip.speed || 1;
+    const inOffset = sourceOffsetFor(clip, delta);
+    const fullOffset = sourceOffsetFor(clip, clip.duration);
     return {
       ...clip,
       start: nextStart,
       duration: clip.duration - delta,
-      inPoint: clip.inPoint + delta * speed,
-      outPoint: clip.inPoint + delta * speed + (clip.duration - delta) * speed,
+      inPoint: clip.inPoint + inOffset,
+      outPoint: clip.inPoint + fullOffset,
     };
   }
   const minEnd = clip.start + minDuration;
   const nextEnd = Math.max(newTime, minEnd);
   const duration = nextEnd - clip.start;
-  const speed = clip.speed || 1;
+  const endOffset = sourceOffsetFor(clip, duration);
   return {
     ...clip,
     duration,
-    outPoint: clip.inPoint + duration * speed,
+    outPoint: clip.inPoint + endOffset,
   };
 }
 
@@ -288,7 +361,17 @@ export function splitClip(
   if (offset <= MIN_CLIP_DURATION || offset >= clip.duration - MIN_CLIP_DURATION) {
     return null;
   }
-  const speed = clip.speed || 1;
+  const curve = (clip.speedCurve ?? [])
+    .filter((p) => Number.isFinite(p.speed) && p.speed > 0 && p.time >= 0)
+    .sort((a, b) => a.time - b.time);
+  const speedAt = (t: number): number => {
+    let rate = clip.speed || 1;
+    for (const point of curve) {
+      if (point.time > t) break;
+      rate = point.speed;
+    }
+    return rate;
+  };
 
   const leftSide = (keyframes: Keyframe[]): Keyframe[] =>
     keyframes.filter((keyframe) => keyframe.time <= offset).map((keyframe) => ({ ...keyframe }));
@@ -311,7 +394,9 @@ export function splitClip(
     ...clip,
     id: clip.id,
     duration: offset,
-    outPoint: clip.inPoint + offset * speed,
+    outPoint: clip.inPoint + sourceOffsetFor(clip, offset),
+    speedCurve: curve.filter((p) => p.time >= 0 && p.time <= offset),
+    speed: clip.speed || 1,
     transform: {
       ...clip.transform,
       positionX: splitCurve(clip.transform.positionX, "left"),
@@ -329,8 +414,10 @@ export function splitClip(
     id: makeId("clip"),
     start: clip.start + offset,
     duration: clip.duration - offset,
-    inPoint: clip.inPoint + offset * speed,
+    inPoint: clip.inPoint + sourceOffsetFor(clip, offset),
     outPoint: clip.outPoint,
+    speedCurve: curve.filter((p) => p.time > offset).map((p) => ({ ...p, time: p.time - offset })),
+    speed: speedAt(offset),
     transitionIn: undefined,
     transform: {
       ...clip.transform,
