@@ -266,6 +266,21 @@ export function Timeline() {
       canvas.setPointerCapture(event.pointerId);
 
       if (y < RULER_HEIGHT) {
+        const range = state.project.exportRange;
+        if (range) {
+          const t0 = timeToX(range.start, state.zoom, state.scroll);
+          const t1 = timeToX(range.end, state.zoom, state.scroll);
+          if (Math.abs(x - t0) < 6) {
+            editorStore.beginInteraction();
+            dragRef.current = { mode: "range-start" };
+            return;
+          }
+          if (Math.abs(x - t1) < 6) {
+            editorStore.beginInteraction();
+            dragRef.current = { mode: "range-end" };
+            return;
+          }
+        }
         dragRef.current = { mode: "playhead" };
         const time = pointerToTime(event.clientX);
         const hit = state.project.markers.find(
@@ -377,6 +392,17 @@ export function Timeline() {
         editorStore.trimClipLive(drag.clipId, "start", time);
       } else if (drag.mode === "trim-end" && drag.clipId) {
         editorStore.trimClipLive(drag.clipId, "end", time);
+      } else if (drag.mode === "range-start" || drag.mode === "range-end") {
+        const state = editorStore.getState();
+        const current = state.project.exportRange;
+        if (current) {
+          const clamped = Math.max(0, Math.min(time, state.project.duration));
+          editorStore.setExportRangeLive(
+            drag.mode === "range-start"
+              ? { start: clamped, end: current.end }
+              : { start: current.start, end: clamped },
+          );
+        }
       }
     },
     [pointerToTime],
@@ -476,7 +502,13 @@ export function Timeline() {
       return;
     }
     if (drag.mode !== "playhead") {
-      editorStore.commitInteraction(drag.mode === "move" ? "Moved clip" : "Trimmed clip");
+      const label =
+        drag.mode === "move"
+          ? "Moved clip"
+          : drag.mode.startsWith("range-")
+            ? "Adjusted export range"
+            : "Trimmed clip";
+      editorStore.commitInteraction(label);
     }
   }, []);
 
@@ -562,7 +594,7 @@ interface DropPreview {
 }
 
 interface DragState {
-  mode: "playhead" | "move" | "trim-start" | "trim-end" | "marquee";
+  mode: "playhead" | "move" | "trim-start" | "trim-end" | "marquee" | "range-start" | "range-end";
   clipId?: string;
   grabOffset?: number;
   trackId?: string;

@@ -493,5 +493,22 @@ describe("clip context-menu actions", () => {
     expect(editorStore.getState().project.tracks[0].clips).toHaveLength(1);
   });
 });
+
+
+describe("live export-range adjustment", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+    editorStore.updateProject((project) => ({ ...project, duration: 20, exportRange: { start: 4, end: 10 } }), "seed");
+  });
+
+  it("keeps both edges inside the project and degenerates to null", () => {
+    editorStore.setExportRangeLive({ start: 12, end: 6 });
+    expect(editorStore.getState().project.exportRange).toBeNull();
+    editorStore.setExportRangeLive({ start: -3, end: 999 });
+    expect(editorStore.getState().project.exportRange).toEqual({ start: 0, end: 20 });
+    editorStore.commitInteraction("Adjusted export range");
+    expect(editorStore.getState().past).toHaveLength(1);
+  });
+});
 });
 

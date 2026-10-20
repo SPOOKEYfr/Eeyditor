@@ -1149,6 +1149,16 @@ class EditorStore {
     }, range ? "Set export range" : "Cleared export range");
   }
 
+  /** Live export-range adjustment during a handle drag (undo pooled at commit). */
+  setExportRangeLive(range: ExportRange | null): void {
+    this.updateProjectLive((project) => {
+      if (!range) return { ...project, exportRange: null };
+      const start = Math.max(0, Math.min(range.start, project.duration));
+      const end = Math.max(start, Math.min(range.end, project.duration));
+      return { ...project, exportRange: end > start ? { start, end } : null };
+    }, "Adjusted export range");
+  }
+
   setShortcuts(showShortcuts: boolean): void {
     this.patch({ showShortcuts });
   }
