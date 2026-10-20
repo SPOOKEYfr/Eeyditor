@@ -225,6 +225,18 @@ export function Timeline() {
   }, []);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string; trackId: string } | null>(null);
+  let rightNeighbor: TimelineClip | null = null;
+  let leftNeighbor: TimelineClip | null = null;
+  let contextClip: TimelineClip | null = null;
+  if (contextMenu) {
+    const project = editorStore.getState().project;
+    const track = project.tracks.find((t) => t.id === contextMenu.trackId);
+    contextClip = (track?.clips.find((c) => c.id === contextMenu.clipId) ?? null);
+    const sorted = track?.clips.slice().sort((a, b) => a.start - b.start) ?? [];
+    const index = sorted.findIndex((c) => c.id === contextMenu.clipId);
+    leftNeighbor = index > 0 ? sorted[index - 1] : null;
+    rightNeighbor = index >= 0 ? sorted[index + 1] : null;
+  }
   const [reorderLine, setReorderLine] = useState<number | null>(null);
   const reorderRef = useRef<{ id: string; from: number } | null>(null);
   const trackStackRef = useRef<HTMLDivElement | null>(null);
@@ -665,6 +677,16 @@ export function Timeline() {
             >
               {[
                 { label: "Split at playhead", run: () => editorStore.splitAtPlayhead() },
+                ...(rightNeighbor &&
+                contextClip &&
+                rightNeighbor.start <= contextClip.start + contextClip.duration
+                  ? [{ label: "Crossfade right", run: () => editorStore.addCrossfade(contextMenu.clipId, rightNeighbor.id) }]
+                  : []),
+                ...(leftNeighbor &&
+                contextClip &&
+                leftNeighbor.start + leftNeighbor.duration >= contextClip.start
+                  ? [{ label: "Crossfade left", run: () => editorStore.addCrossfade(contextMenu.clipId, leftNeighbor.id) }]
+                  : []),
                 { label: "Duplicate clip", run: () => editorStore.duplicateClip(contextMenu.clipId) },
                 { label: "Delete clip", run: () => editorStore.removeClip(contextMenu.clipId) },
                 { label: "Ripple delete", run: () => editorStore.rippleDeleteSelected() },
@@ -932,6 +954,16 @@ function drawClip(
     ctx.restore();
   }
 
+  // Transition edge badges.
+  const startX = timeToX(clip.start, zoom, scroll);
+  const endX = timeToX(clip.start + clip.duration, zoom, scroll);
+  if (clip.transitionIn && startX >= drawX && startX <= drawX + drawW) {
+    drawTransitionBadge(ctx, startX, top, clipHeight, true);
+  }
+  if (clip.transitionOut && endX >= drawX && endX <= drawX + drawW) {
+    drawTransitionBadge(ctx, endX, top, clipHeight, false);
+  }
+
   // Opacity keyframe diamonds.
   const curve = clip.transform.opacity;
   if (curve.keyframes.length > 0) {
@@ -953,6 +985,27 @@ function drawClip(
     ctx.fillRect(drawX, top, 3, clipHeight);
     ctx.fillRect(drawX + drawW - 3, top, 3, clipHeight);
   }
+}
+
+function drawTransitionBadge(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  top: number,
+  height: number,
+  left: boolean,
+): void {
+  ctx.fillStyle = "#FFB300";
+  ctx.beginPath();
+  if (left) {
+    ctx.moveTo(x, top);
+    ctx.lineTo(x + 8, top + height / 2);
+    ctx.lineTo(x, top + height);
+  } else {
+    ctx.moveTo(x, top);
+    ctx.lineTo(x - 8, top + height / 2);
+    ctx.lineTo(x, top + height);
+  }
+  ctx.fill();
 }
 
 function drawRuler(

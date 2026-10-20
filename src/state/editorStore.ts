@@ -278,6 +278,38 @@ class EditorStore {
     }, `Set ${edge} transition`);
   }
 
+  /** CapCut-style crossfade between two touching clips on the same track. */
+  addCrossfade(clipId: string, neighborId: string, duration = 0.5): void {
+    const clip = this.state.project.tracks.flatMap((track) => track.clips).find((c) => c.id === clipId);
+    const neighbor = this.state.project.tracks.flatMap((track) => track.clips).find((c) => c.id === neighborId);
+    if (!clip || !neighbor || clip === neighbor) return;
+    if (this.clipIsLocked(clipId) || this.clipIsLocked(neighborId)) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
+    const d = Math.max(0.05, Math.min(duration, clip.duration, neighbor.duration));
+    if (neighbor.start >= clip.start) {
+      this.updateClip(clipId, (c) => ({
+        ...c,
+        transitionOut: { id: makeId("transition"), kind: "fade", duration: d, direction: "right" },
+      }));
+      this.updateClip(neighborId, (c) => ({
+        ...c,
+        transitionIn: { id: makeId("transition"), kind: "fade", duration: d, direction: "right" },
+      }));
+    } else {
+      this.updateClip(clipId, (c) => ({
+        ...c,
+        transitionIn: { id: makeId("transition"), kind: "fade", duration: d, direction: "left" },
+      }));
+      this.updateClip(neighborId, (c) => ({
+        ...c,
+        transitionOut: { id: makeId("transition"), kind: "fade", duration: d, direction: "left" },
+      }));
+    }
+    this.patch({ status: "Added crossfade" });
+  }
+
   trimClipLive(clipId: string, edge: "start" | "end", newTime: number): void {
     if (this.clipIsLocked(clipId)) return;
     const ids = new Set(this.unlocked(this.expandLinked([clipId])));

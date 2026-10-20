@@ -597,5 +597,57 @@ describe("project length and lane sizing helpers", () => {
     expect(editorStore.getState().project.tracks[0].height).toBe(240);
   });
 });
+
+
+describe("clip crossfades", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+    const video = editorStore.getState().project.tracks.find((track) => track.type === "video")!;
+    const a = createClip({ trackId: video.id, start: 0, duration: 2, kind: "video" });
+    const b = createClip({ trackId: video.id, start: 2, duration: 2, kind: "video" });
+    editorStore.updateProject(
+      (project) => ({
+        ...project,
+        tracks: project.tracks.map((track) => (track.id === video.id ? { ...track, clips: [a, b] } : track)),
+      }),
+      "seed clips",
+    );
+  });
+
+  const ids = () => editorStore.getState().project.tracks.find((track) => track.type === "video")!.clips;
+
+  it("adds a fade crossfade between two touching clips", () => {
+    const [a, b] = ids();
+    editorStore.addCrossfade(a.id, b.id);
+    const [a2, b2] = ids();
+    expect(a2.transitionOut).toMatchObject({ kind: "fade", duration: 0.5, direction: "right" });
+    expect(b2.transitionIn).toMatchObject({ kind: "fade", duration: 0.5, direction: "right" });
+    expect(a2.transitionIn).toBeUndefined();
+    expect(b2.transitionOut).toBeUndefined();
+  });
+
+  it("works in either direction", () => {
+    const [a, b] = ids();
+    editorStore.addCrossfade(b.id, a.id);
+    const [a2, b2] = ids();
+    expect(b2.transitionIn?.direction).toBe("left");
+    expect(a2.transitionOut?.direction).toBe("left");
+  });
+
+  it("clamps duration to the shorter clip", () => {
+    const [a, b] = ids();
+    editorStore.updateClip(b.id, (c) => ({ ...c, duration: 0.2 }), "shorten");
+    editorStore.addCrossfade(a.id, b.id, 0.5);
+    expect(ids()[1].transitionIn?.duration).toBe(0.2);
+  });
+
+  it("refuses locked clips", () => {
+    const [a] = ids();
+    editorStore.setClipLocked(a.id, true);
+    editorStore.addCrossfade(a.id, ids()[1].id);
+    expect(editorStore.getState().status).toBe("Clip is locked");
+    expect(a.transitionOut).toBeUndefined();
+  });
+});
 });
 
