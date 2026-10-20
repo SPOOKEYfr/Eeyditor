@@ -98,6 +98,59 @@ describe("clip clipboard", () => {
     expect(clipCount()).toBe(0);
   });
 
+  it("blocks timeline edits on locked clips and tracks", () => {
+    editorStore.loadProject(createEmptyProject());
+    const project = editorStore.getState().project;
+    const video = project.tracks.find((track) => track.type === "video");
+    const audio = project.tracks.find((track) => track.type === "audio");
+    if (!video || !audio) throw new Error("missing tracks");
+    const lockedClip = editorStore.addClip(video.id, 0);
+    const freeClip = editorStore.addClip(audio.id, 0);
+    editorStore.selectClip(lockedClip);
+    editorStore.setClipLocked(lockedClip, true);
+
+    const startOf = (id: string) =>
+      editorStore
+        .getState()
+        .project.tracks.flatMap((track) => track.clips)
+        .find((clip) => clip.id === id)?.start;
+
+    editorStore.moveClip(lockedClip, 10);
+    expect(startOf(lockedClip)).toBe(0);
+    editorStore.trimClip(lockedClip, "end", 1);
+    const lockedDuration = editorStore
+      .getState()
+      .project.tracks.flatMap((track) => track.clips)
+      .find((clip) => clip.id === lockedClip)?.duration;
+    expect(lockedDuration).toBe(editorStore.getState().project.tracks.flatMap((t) => t.clips).find((c) => c.id === lockedClip)?.duration);
+    editorStore.splitClipAt(lockedClip, 2);
+    expect(
+      editorStore.getState().project.tracks.flatMap((track) => track.clips).filter((clip) => clip.trackId === video.id),
+    ).toHaveLength(1);
+    editorStore.rippleDeleteSelected();
+    expect(
+      editorStore.getState().project.tracks.flatMap((track) => track.clips).some((clip) => clip.id === lockedClip),
+    ).toBe(true);
+    expect(editorStore.getState().status).toBe("Clip is locked");
+
+    editorStore.setClipLocked(lockedClip, false);
+    editorStore.moveClip(lockedClip, 10);
+    expect(startOf(lockedClip)).toBe(10);
+
+    editorStore.updateProject(
+      (current) => ({
+        ...current,
+        tracks: current.tracks.map((track) =>
+          track.id === audio.id ? { ...track, locked: true } : track,
+        ),
+      }),
+      "Locked track",
+    );
+    editorStore.selectClip(freeClip);
+    editorStore.moveClip(freeClip, 5);
+    expect(startOf(freeClip)).toBe(0);
+  });
+
   it("replaces or extends the marquee selection", () => {
     editorStore.loadProject(createEmptyProject());
     const track = editorStore.getState().project.tracks[0];

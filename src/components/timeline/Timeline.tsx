@@ -252,6 +252,10 @@ export function Timeline() {
       } else if (!editorStore.getState().selectedClipIds.includes(clip.id)) {
         editorStore.selectClip(clip.id);
       }
+      if (clip.locked || lane.track.locked) {
+        editorStore.setStatus("Clip is locked");
+        return;
+      }
       editorStore.beginInteraction();
       if (x - startX <= EDGE_HANDLE) {
         dragRef.current = { mode: "trim-start", clipId: clip.id };

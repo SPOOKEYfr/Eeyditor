@@ -171,6 +171,7 @@ export function MediaBin() {
     const track = state.project.tracks.find((candidate) => candidate.type === preferred) ?? state.project.tracks[0];
     if (!track) return;
     const id = editorStore.addClip(track.id, state.playhead);
+    if (!id) return;
     editorStore.updateClip(id, (clip) => ({
       ...clip,
       sourceId: source.id,

@@ -103,6 +103,15 @@ export function Inspector() {
           >
             {clip.reversed ? "Reversed" : "Reverse clip"}
           </button>
+          <button
+            type="button"
+            onClick={() => editorStore.setClipLocked(clip.id, !clip.locked)}
+            className={`w-full rounded-lg px-2 py-1 text-[11px] shadow-recessed-sm transition-colors ${
+              clip.locked ? "bg-amber/20 text-amber" : "bg-recessed text-muted hover:text-ink"
+            }`}
+          >
+            {clip.locked ? "Locked" : "Lock clip"}
+          </button>
         </Section>
 
         <Section title="Audio">

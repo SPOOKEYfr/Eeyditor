@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-81%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-82%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -44,6 +44,7 @@ or missing (see [Known limits](#known-limits)).
 | Effect stack in monitor and export | ✅ working (core subset, incl. chroma key) |
 | Real waveforms, track mixer, multi-select (shift/ctrl + marquee), clipboard | ✅ working |
 | Clip link groups (move/trim/split/delete together) | ✅ working |
+| Clip and track locking (blocks timeline edits) | ✅ working |
 | SRT subtitle import, monitor overlay and burn-in | ✅ working |
 | CI (typecheck, tests, build, cargo check) | ✅ configured |
 | Animated GIF and audio-only MP3 export | ✅ working |
@@ -181,7 +182,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (81 tests)
+npm run test           # Vitest (82 tests)
 npm run e2e            # real FFmpeg renders through the export plan
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
@@ -194,7 +195,7 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 81 / 81 passed             |
+| `vitest run`         | 82 / 82 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
 | FFmpeg end-to-end    | 31 / 31 checks passed      |

@@ -163,7 +163,28 @@ class EditorStore {
   }
 
   /** Move a clip without creating per-frame history entries. */
+  /** True when a clip cannot be edited because it or its track is locked. */
+  private clipIsLocked(clipId: string): boolean {
+    for (const track of this.state.project.tracks) {
+      const clip = track.clips.find((candidate) => candidate.id === clipId);
+      if (clip) return clip.locked || track.locked;
+    }
+    return false;
+  }
+
+  private unlocked(ids: string[]): string[] {
+    return ids.filter((id) => !this.clipIsLocked(id));
+  }
+
+  setClipLocked(clipId: string, locked: boolean): void {
+    this.updateClip(clipId, (clip) => ({ ...clip, locked }), locked ? "Locked clip" : "Unlocked clip");
+  }
+
   moveClipLive(clipId: string, newStart: number): void {
+    if (this.clipIsLocked(clipId)) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
     const state = this.state;
     let target = Math.max(0, newStart);
     if (state.snapEnabled) {
@@ -186,10 +207,17 @@ class EditorStore {
     const snapshot = this.interactionSnapshot ?? state.project;
     const snapshotClips = snapshot.tracks.flatMap((track) => track.clips);
     const anchor = snapshotClips.find((clip) => clip.id === anchorId);
-    if (!anchor || ids.length <= 1) {
+    const movable = this.unlocked(ids);
+    if (!anchor || movable.length === 0) {
+      if (anchor) this.patch({ status: "Clip is locked" });
+      return;
+    }
+    if (movable.length <= 1) {
       this.moveClipLive(anchorId, newStart);
       return;
     }
+    ids.length = 0;
+    ids.push(...movable);
     let target = Math.max(0, newStart);
     if (state.snapEnabled) {
       const targets = collectSnapTargets(state.project, anchorId);
@@ -245,7 +273,8 @@ class EditorStore {
   }
 
   trimClipLive(clipId: string, edge: "start" | "end", newTime: number): void {
-    const ids = new Set(this.expandLinked([clipId]));
+    if (this.clipIsLocked(clipId)) return;
+    const ids = new Set(this.unlocked(this.expandLinked([clipId])));
     this.updateProjectLive((project) => ({
       ...project,
       tracks: project.tracks.map((track) => ({
@@ -429,6 +458,14 @@ class EditorStore {
   pasteClipboard(): void {
     const sources = clipClipboard;
     if (!sources || sources.length === 0) return;
+    if (
+      sources.every((source) =>
+        this.state.project.tracks.some((track) => track.id === source.trackId && track.locked),
+      )
+    ) {
+      this.patch({ status: "Track is locked" });
+      return;
+    }
     const anchor = Math.min(...sources.map((source) => source.start));
     const groups = new Map<string, string>();
     const placed = sources.map((source) => {
@@ -470,8 +507,11 @@ class EditorStore {
   }
 
   duplicateSelectedClip(): void {
-    const sources = this.selectedClips();
-    if (sources.length === 0) return;
+    const sources = this.selectedClips().filter((clip) => !this.clipIsLocked(clip.id));
+    if (sources.length === 0) {
+      if (this.selectedClips().length > 0) this.patch({ status: "Clip is locked" });
+      return;
+    }
     const span = Math.max(...sources.map((clip) => clip.start + clip.duration)) -
       Math.min(...sources.map((clip) => clip.start));
     const groups = new Map<string, string>();
@@ -543,6 +583,10 @@ class EditorStore {
   }
 
   removeTrack(trackId: string): void {
+    if (this.state.project.tracks.find((track) => track.id === trackId)?.locked) {
+      this.patch({ status: "Track is locked" });
+      return;
+    }
     this.updateProject(
       (project) => ({ ...project, tracks: project.tracks.filter((t) => t.id !== trackId) }),
       "Removed track",
@@ -551,6 +595,10 @@ class EditorStore {
 
   addClip(trackId: string, start: number): string {
     const track = this.state.project.tracks.find((candidate) => candidate.id === trackId);
+    if (track?.locked) {
+      this.patch({ status: "Track is locked" });
+      return "";
+    }
     const kind = track?.type === "audio" ? "audio" : track?.type === "text" ? "text" : "video";
     const clip = createClip({ trackId, start, duration: 4, kind, colorIndex: Math.floor(start) });
     this.updateProject((project) => ({
@@ -575,6 +623,10 @@ class EditorStore {
   }
 
   moveClip(clipId: string, newStart: number): void {
+    if (this.clipIsLocked(clipId)) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
     const state = this.state;
     let target = Math.max(0, newStart);
     if (state.snapEnabled) {
@@ -592,6 +644,10 @@ class EditorStore {
   }
 
   trimClip(clipId: string, edge: "start" | "end", newTime: number): void {
+    if (this.clipIsLocked(clipId)) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
     this.updateProject((project) => ({
       ...project,
       tracks: project.tracks.map((track) => ({
@@ -607,6 +663,10 @@ class EditorStore {
     const clips = this.state.project.tracks.flatMap((track) => track.clips);
     const target = clips.find((clip) => clip.id === clipId);
     if (!target) return;
+    if (this.clipIsLocked(clipId)) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
     const ids = new Set<string>([clipId]);
     if (target.groupId) {
       for (const clip of clips) {
@@ -652,7 +712,11 @@ class EditorStore {
         ? [this.state.selectedClipId]
         : [];
     if (baseIds.length === 0) return;
-    const ids = this.expandLinked(baseIds);
+    const ids = this.unlocked(this.expandLinked(baseIds));
+    if (ids.length === 0) {
+      this.patch({ status: "Clip is locked" });
+      return;
+    }
     this.updateProject((project) => ({
       ...project,
       tracks: project.tracks.map((track) => {
