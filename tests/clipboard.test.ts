@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { editorStore } from "../src/state/editorStore";
-import { createDemoProject, createEmptyProject, createMediaSource } from "../src/core/project/factory";
+import { createClip, createDemoProject, createEmptyProject, createMediaSource } from "../src/core/project/factory";
 
 function firstClipId(): string {
   const project = editorStore.getState().project;
@@ -275,5 +275,65 @@ describe("dropping media onto lanes", () => {
     expect(editorStore.getState().status).toBe("Track is locked");
     expect(editorStore.getState().project.tracks.flatMap((track) => track.clips)).toHaveLength(0);
   });
+
+
+describe("moving clips across tracks", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+  });
+
+  const seedClip = (trackId: string, kind: string, extra = {}) => {
+    const source = createMediaSource({
+      path: "generator://x",
+      kind: kind as never,
+      name: "X",
+      duration: 3,
+      hasVideo: kind !== "audio",
+      hasAudio: kind === "audio",
+    });
+    editorStore.updateProject(
+      (project) => ({ ...project, media: [...project.media, source] }),
+      "Seed source",
+    );
+    const clip = createClip({ trackId, start: 0, duration: 2, kind: kind as never });
+    editorStore.updateProject(
+      (project) => ({
+        ...project,
+        tracks: project.tracks.map((track) =>
+          track.id === trackId
+            ? { ...track, clips: [...track.clips, { ...clip, sourceId: source.id, ...extra }] }
+            : track,
+        ),
+      }),
+      "Seed clip",
+    );
+    return clip.id;
+  };
+
+  const trackId = (type: string) =>
+    editorStore.getState().project.tracks.find((track) => track.type === type)!.id;
+
+  it(("moves a video clip from the overlay back to the main video track") as never, () => {
+    const id = seedClip(trackId("overlay"), "video");
+    editorStore.moveClipAcrossLive(id, trackId("video"), 1);
+    const clips = editorStore.getState().project.tracks.find((t) => t.type === "video")!.clips;
+    expect(clips.map((clip) => clip.id)).toContain(id);
+    expect(editorStore.getState().project.tracks.find((t) => t.type === "overlay")!.clips).toHaveLength(0);
+  });
+
+  it("refuses audio clips on visual tracks", () => {
+    const id = seedClip(trackId("audio"), "audio");
+    editorStore.moveClipAcrossLive(id, trackId("video"), 1);
+    expect(editorStore.getState().status).toBe("Audio stays on audio tracks");
+    const audio = editorStore.getState().project.tracks.find((t) => t.type === "audio")!.clips[0];
+    expect(audio.start).toBe(0);
+  });
+
+  it("locks the cross-track move behind locked tracks and clips", () => {
+    const id = seedClip(trackId("video"), "video", { locked: true });
+    editorStore.moveClipAcrossLive(id, trackId("overlay"), 1);
+    expect(editorStore.getState().status).toBe("Clip is locked");
+  });
+});
 });
 

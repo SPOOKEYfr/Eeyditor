@@ -598,6 +598,52 @@ class EditorStore {
     );
   }
 
+  /** Drag an unlocked clip onto another compatible track (single clip). */
+  moveClipAcrossLive(clipId: string, targetTrackId: string, newStart: number): void {
+    const state = this.state;
+    const sourceTrack = state.project.tracks.find((track) =>
+      track.clips.some((clip) => clip.id === clipId),
+    );
+    const targetTrack = state.project.tracks.find((track) => track.id === targetTrackId);
+    const clip = state.project.tracks.flatMap((track) => track.clips).find((c) => c.id === clipId);
+    if (!sourceTrack || !targetTrack || !clip) return;
+    if (this.clipIsLocked(clipId) || targetTrack.locked) {
+      this.patch({ status: sourceTrack.locked || this.clipIsLocked(clipId) ? "Clip is locked" : "Track is locked" });
+      return;
+    }
+    const isAudio = clip.kind === "audio" || sourceTrack.type === "audio";
+    const allowed =
+      isAudio
+        ? targetTrack.type === "audio"
+        : sourceTrack.type === "text"
+          ? targetTrack.type === "text"
+          : targetTrack.type === "video" || targetTrack.type === "overlay";
+    if (!allowed) {
+      this.patch({ status: isAudio ? "Audio stays on audio tracks" : "Clips stay on compatible tracks" });
+      return;
+    }
+    if (targetTrack.id === sourceTrack.id) {
+      this.moveClipsLive(clipId, newStart);
+      return;
+    }
+    let target = Math.max(0, newStart);
+    if (state.snapEnabled) {
+      target = snapTime(target, collectSnapTargets(state.project, clipId), SNAP_THRESHOLD_PX / state.zoom).time;
+    }
+    this.updateProjectLive((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) => {
+        if (track.id === sourceTrack.id) {
+          return { ...track, clips: track.clips.filter((candidate) => candidate.id !== clipId) };
+        }
+        if (track.id === targetTrack.id) {
+          return { ...track, clips: overwriteRange(track.clips, clip, target) };
+        }
+        return track;
+      }),
+    }), "Moved clip between tracks");
+  }
+
   /** Place a media source on a specific track at a specific time, overwriting overlaps. */
   addSourceAt(sourceId: string, trackId: string, start: number): void {
     const track = this.state.project.tracks.find((candidate) => candidate.id === trackId);

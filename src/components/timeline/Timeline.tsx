@@ -277,7 +277,7 @@ export function Timeline() {
       } else if (endX - x <= EDGE_HANDLE) {
         dragRef.current = { mode: "trim-end", clipId: clip.id };
       } else {
-        dragRef.current = { mode: "move", clipId: clip.id, grabOffset: time - clip.start };
+        dragRef.current = { mode: "move", clipId: clip.id, grabOffset: time - clip.start, trackId: lane.track.id };
       }
     },
     [pointerToTime],
@@ -315,6 +315,17 @@ export function Timeline() {
       }
 
       if (drag.mode === "move" && drag.clipId) {
+        const lanes = computeLanes(state.project.tracks, scrollYRef.current);
+        const laneY = { y: event.clientY - (canvasRef.current?.getBoundingClientRect().top ?? 0) };
+        const lane = lanes.find((entry) => laneY.y >= entry.y && laneY.y <= entry.y + entry.height);
+        if (lane && lane.track.id !== drag.trackId) {
+          const next: DragState = { ...drag, trackId: lane.track.id };
+          editorStore.moveClipAcrossLive(drag.clipId, lane.track.id, time - (drag.grabOffset ?? 0));
+          // Keep the grab offset stable across lane hops; unsuccessful hops
+          // revert the lane so a downward drag can retry the original lane.
+          dragRef.current = next;
+          return;
+        }
         editorStore.moveClipsLive(drag.clipId, time - (drag.grabOffset ?? 0));
       } else if (drag.mode === "trim-start" && drag.clipId) {
         editorStore.trimClipLive(drag.clipId, "start", time);
@@ -472,6 +483,7 @@ interface DragState {
   mode: "playhead" | "move" | "trim-start" | "trim-end" | "marquee";
   clipId?: string;
   grabOffset?: number;
+  trackId?: string;
   x0?: number;
   y0?: number;
   x1?: number;
