@@ -6,6 +6,7 @@ import {
   mixToMono,
   peaksToAmplitudes,
   waveformBand,
+  waveformSample,
 } from "../src/core/audio/waveform";
 
 describe("audio waveform math", () => {
@@ -45,5 +46,13 @@ describe("audio waveform math", () => {
     expect(waveformBand("video", 60, false, false)).toBeNull();
     expect(waveformBand("image", 60, false, false)).toBeNull();
     expect(waveformBand("video", 60, false, true)?.mid).toBeCloseTo(30);
+  });
+
+  it("mirrors waveform samples for reversed clips", () => {
+    expect(waveformSample(0, 10, 100, false)).toBe(0);
+    expect(waveformSample(9, 10, 100, false)).toBe(90);
+    expect(waveformSample(0, 10, 100, true)).toBe(99);
+    expect(waveformSample(9, 10, 100, true)).toBe(9);
+    expect(waveformSample(-5, 10, 100, false)).toBe(0);
   });
 });

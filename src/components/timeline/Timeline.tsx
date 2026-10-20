@@ -23,7 +23,7 @@ import {
   timeToX,
   xToTime,
 } from "../../core/timeline/engine";
-import { syntheticChannel, waveformBand } from "../../core/audio/waveform";
+import { syntheticChannel, waveformBand, waveformSample } from "../../core/audio/waveform";
 import { audioWaveform } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
 import { TrackHeader } from "./TrackHeader";
@@ -564,7 +564,7 @@ function drawClip(
     const mid = top + band.mid;
     const columns = Math.max(2, Math.floor(drawW / 2));
     for (let i = 0; i < columns; i += 1) {
-      const sample = samples[Math.floor((i / columns) * samples.length)];
+      const sample = samples[waveformSample(i, columns, samples.length, clip.reversed)];
       const x = drawX + i * 2;
       const amplitude = sample * band.amplitude;
       ctx.moveTo(x, mid - amplitude);
@@ -584,6 +584,11 @@ function drawClip(
     ctx.font = "600 11px Inter, system-ui, sans-serif";
     ctx.textBaseline = "top";
     ctx.fillText(clip.name, drawX + 9, top + 6);
+    if (clip.reversed) {
+      ctx.font = "700 8px Inter, system-ui, sans-serif";
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillText("REV", drawX + 9, top + clipHeight - 11);
+    }
     ctx.restore();
   }
 

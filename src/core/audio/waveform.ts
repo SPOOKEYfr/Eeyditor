@@ -211,3 +211,14 @@ export function waveformBand(
   }
   return null;
 }
+
+/** Sample index for a waveform column, mirroring reversed clips. */
+export function waveformSample(
+  column: number,
+  columns: number,
+  total: number,
+  reversed: boolean,
+): number {
+  const position = Math.min(total - 1, Math.max(0, Math.floor((column / Math.max(1, columns)) * total)));
+  return reversed ? total - 1 - position : position;
+}
