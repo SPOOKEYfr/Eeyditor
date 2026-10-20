@@ -52,6 +52,21 @@ describe("ffmpeg export pipeline", () => {
     expect(slidePlan.filterComplex).toContain("1-(t-");
   });
 
+  it("positions and sizes subtitle cues per cue", () => {
+    const project = createEmptyProject();
+    project.subtitles = [
+      { id: "a", start: 0, end: 1, text: "low", position: "bottom", sizeScale: 1 },
+      { id: "b", start: 1, end: 2, text: "high", position: "top", sizeScale: 1.5, color: "#FFB300" },
+      { id: "c", start: 2, end: 3, text: "mid", position: "center" },
+    ];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("y=h*0.94-text_h");
+    expect(plan.filterComplex).toContain("y=h*0.165-text_h");
+    expect(plan.filterComplex).toContain("y=h*0.5-text_h");
+    expect(plan.filterComplex).toContain("fontcolor=#FFB300");
+    expect(plan.filterComplex).toContain("fontsize=73");
+  });
+
   it("applies 3D LUT effects and skips them without a file", () => {
     const project = createEmptyProject();
     const track = project.tracks.find((entry) => entry.type === "video");

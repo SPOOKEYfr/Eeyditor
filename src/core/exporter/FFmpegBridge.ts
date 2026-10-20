@@ -10,6 +10,7 @@ import type {
 } from "../../types/timeline";
 import { evaluateCurve } from "../keyframes/bezier";
 import { clipEnd } from "../timeline/engine";
+import { subtitleBaseline, subtitleFontSize } from "../subtitles/style";
 import {
   hasTransition,
   isFadeKind,
@@ -403,19 +404,19 @@ export function buildFfmpegPlan(
   }
 
   let subtitleCursor = videoCursor;
-  const subtitleSize = Math.max(12, Math.round(project.resolution.height * 0.045));
   project.subtitles.forEach((cue, index) => {
     if (!cue.text.trim() || cue.end <= cue.start) return;
+    const subtitleSize = Math.max(12, Math.round(subtitleFontSize(project.resolution.height, cue)));
     const parts = [
       `text=${escapeDrawtext(cue.text)}`,
-      "fontcolor=white",
+      `fontcolor=${escapeFilterGraph(cue.color ?? "white")}`,
       `fontsize=${subtitleSize}`,
       "line_spacing=6",
       "box=1",
       "boxcolor=black@0.55",
       "boxborderw=10",
       "x=(w-text_w)/2",
-      "y=h-text_h-h*0.06",
+      `y=h*${f(subtitleBaseline(cue))}-text_h`,
       `enable=${escapeFilterGraph(`between(t,${f(cue.start)},${f(cue.end)})`)}`,
     ];
     const next = `[sub${index}]`;

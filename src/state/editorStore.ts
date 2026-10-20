@@ -4,6 +4,7 @@ import {
   type EeyditorProject,
   type Keyframe,
   type KeyframeCurve,
+  type SubtitleCue,
   type TimelineClip,
   type TrackType,
   type Transition,
@@ -842,6 +843,20 @@ class EditorStore {
   }
 
   // ---- markers -----------------------------------------------------------
+
+  updateSubtitleCue(cueId: string, recipe: (cue: SubtitleCue) => SubtitleCue, label = "Updated cue"): void {
+    this.updateProject((project) => ({
+      ...project,
+      subtitles: project.subtitles.map((cue) => (cue.id === cueId ? recipe(cue) : cue)),
+    }), label);
+  }
+
+  removeSubtitleCue(cueId: string): void {
+    this.updateProject((project) => ({
+      ...project,
+      subtitles: project.subtitles.filter((cue) => cue.id !== cueId),
+    }), "Removed cue");
+  }
 
   addMarker(time: number): void {
     this.updateProject((project) => ({

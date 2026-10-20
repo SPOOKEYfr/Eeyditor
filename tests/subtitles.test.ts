@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatSrt, formatTimestamp, parseSrt, parseTimestamp } from "../src/core/subtitles/srt";
+import { parseProject, serializeProject } from "../src/core/project/serialize";
+import { createEmptyProject } from "../src/core/project/factory";
 
 describe("SRT subtitles", () => {
   it("parses timestamps with comma or dot separators", () => {
@@ -41,5 +43,18 @@ describe("SRT subtitles", () => {
     const reparsed = parseSrt(formatSrt(parsed));
     expect(reparsed.map((cue) => cue.text)).toEqual(["Hello", "World"]);
     expect(reparsed[1].end).toBeCloseTo(3.25);
+  });
+
+  it("round-trips per-cue style through save and load", () => {
+    const project = createEmptyProject();
+    project.subtitles = [
+      { id: "a", start: 0, end: 1, text: "one", position: "top", sizeScale: 1.4, color: "#FFB300" },
+      { id: "b", start: 1, end: 2, text: "two" },
+    ];
+    const restored = parseProject(serializeProject(project));
+    expect(restored.subtitles[0].position).toBe("top");
+    expect(restored.subtitles[0].sizeScale).toBeCloseTo(1.4);
+    expect(restored.subtitles[0].color).toBe("#FFB300");
+    expect(restored.subtitles[1].position).toBeUndefined();
   });
 });

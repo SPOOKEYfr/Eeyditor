@@ -28,9 +28,10 @@ import {
   zoomFactor,
 } from "../../core/timeline/transitions";
 import { applyLutToRgba, cachedCube, lutPath, parseCube, rememberCube } from "../../core/effects/lut";
+import { subtitleBaseline, subtitleFontSize } from "../../core/subtitles/style";
 import { convertMediaUrl, invokeSafe, isTauri } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
-import type { BlendMode, MediaSource, TimelineClip, TimelineTrack } from "../../types/timeline";
+import type { BlendMode, MediaSource, SubtitleCue, TimelineClip, TimelineTrack } from "../../types/timeline";
 
 const BRAND_STOPS = ["#FFB300", "#FF5100", "#E60067"];
 
@@ -276,13 +277,13 @@ function drawMediaClip(
 
 function drawSubtitles(
   ctx: CanvasRenderingContext2D,
-  cues: { start: number; end: number; text: string }[],
+  cues: SubtitleCue[],
   playhead: number,
   rect: FrameRect,
 ): void {
   const cue = cues.find((entry) => playhead >= entry.start && playhead < entry.end);
   if (!cue || !cue.text.trim()) return;
-  const fontSize = Math.max(9, rect.h * 0.045);
+  const fontSize = subtitleFontSize(rect.h, cue);
   const lines = cue.text.split("\n");
   const lineHeight = fontSize * 1.25;
   const padding = fontSize * 0.4;
@@ -293,7 +294,7 @@ function drawSubtitles(
   const width = Math.max(...lines.map((line) => ctx.measureText(line).width));
   const height = lines.length * lineHeight;
   const cx = rect.x + rect.w / 2;
-  const bottom = rect.y + rect.h - rect.h * 0.06;
+  const bottom = rect.y + rect.h * subtitleBaseline(cue);
   ctx.fillStyle = "rgba(0,0,0,0.55)";
   ctx.fillRect(
     cx - width / 2 - padding,
@@ -301,7 +302,7 @@ function drawSubtitles(
     width + padding * 2,
     height + padding * 1.2,
   );
-  ctx.fillStyle = "#FFFFFF";
+  ctx.fillStyle = cue.color ?? "#FFFFFF";
   lines.forEach((line, index) => {
     ctx.fillText(line, cx, bottom - (lines.length - 1 - index) * lineHeight);
   });

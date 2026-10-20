@@ -71,6 +71,10 @@ function arr(value: unknown, path: string): unknown[] {
   return fail(path, "expected an array");
 }
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
 function oneOf<T extends string>(
   value: unknown,
   allowed: readonly T[],
@@ -407,12 +411,22 @@ function normalizeSubtitle(value: unknown, path: string): SubtitleCue {
   const record = asRecord(value, path);
   const start = Math.max(0, num(record.start, `${path}.start`, 0));
   const end = Math.max(start, num(record.end, `${path}.end`, start));
-  return {
+  const cue: SubtitleCue = {
     id: str(record.id, `${path}.id`, `cue-${start.toFixed(3)}`),
     start,
     end,
     text: str(record.text, `${path}.text`, ""),
   };
+  if (record.position !== undefined) {
+    cue.position = oneOf(record.position, ["bottom", "center", "top"] as const, `${path}.position`, "bottom");
+  }
+  if (record.sizeScale !== undefined) {
+    cue.sizeScale = clamp(num(record.sizeScale, `${path}.sizeScale`, 1), 0.5, 2);
+  }
+  if (record.color !== undefined && typeof record.color === "string") {
+    cue.color = record.color;
+  }
+  return cue;
 }
 
 function normalizePreset(value: unknown, path: string): RenderPreset {

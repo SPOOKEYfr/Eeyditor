@@ -200,6 +200,96 @@ export function MediaBin() {
             </button>
           )}
         </div>
+        {subtitles.map((cue) => (
+          <div
+            key={cue.id}
+            className="space-y-1 rounded-lg bg-recessed px-2 py-1.5 text-[10px] text-muted shadow-recessed-sm"
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="flex-1 truncate text-ink">{cue.text.replace(/\n/g, " ")}</span>
+              <button
+                type="button"
+                title="Cycle vertical position"
+                onClick={() => {
+                  const next = cue.position === "bottom" ? "center" : cue.position === "center" ? "top" : "bottom";
+                  editorStore.updateSubtitleCue(cue.id, (current) => ({ ...current, position: next }), "Moved cue");
+                }}
+                className="transition-colors hover:text-ink"
+              >
+                {cue.position === "top" ? "top" : cue.position === "center" ? "mid" : "low"}
+              </button>
+              <button
+                type="button"
+                title="Smaller text"
+                onClick={() =>
+                  editorStore.updateSubtitleCue(
+                    cue.id,
+                    (current) => ({ ...current, sizeScale: Math.max(0.5, (current.sizeScale ?? 1) - 0.1) }),
+                    "Resized cue",
+                  )
+                }
+                className="transition-colors hover:text-ink"
+              >
+                -
+              </button>
+              <span className="w-7 text-center font-mono text-[9px]">
+                {Math.round((cue.sizeScale ?? 1) * 100)}%
+              </span>
+              <button
+                type="button"
+                title="Larger text"
+                onClick={() =>
+                  editorStore.updateSubtitleCue(
+                    cue.id,
+                    (current) => ({ ...current, sizeScale: Math.min(2, (current.sizeScale ?? 1) + 0.1) }),
+                    "Resized cue",
+                  )
+                }
+                className="transition-colors hover:text-ink"
+              >
+                +
+              </button>
+              <input
+                type="color"
+                value={cue.color ?? "#FFFFFF"}
+                onChange={(event) =>
+                  editorStore.updateSubtitleCue(cue.id, (current) => ({ ...current, color: event.target.value }), "Recoloured cue")
+                }
+                className="h-4 w-4 cursor-pointer rounded border-0 bg-transparent p-0"
+              />
+              <button
+                type="button"
+                title="Remove cue"
+                onClick={() => editorStore.removeSubtitleCue(cue.id)}
+                className="transition-colors hover:text-magenta"
+              >
+                x
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5 font-mono text-[9px]">
+              <button
+                type="button"
+                title="Start at the playhead"
+                onClick={() =>
+                  editorStore.updateSubtitleCue(
+                    cue.id,
+                    (current) => {
+                      const start = editorStore.getState().playhead;
+                      const length = Math.max(0.2, current.end - current.start);
+                      return { ...current, start, end: start + length };
+                    },
+                    "Moved cue",
+                  )
+                }
+                className="transition-colors hover:text-ink"
+              >
+                {cue.start.toFixed(2)}s
+              </button>
+              <span>-</span>
+              <span>{cue.end.toFixed(2)}s</span>
+            </div>
+          </div>
+        ))}
         {media.length === 0 && (
           <p className="px-1 py-4 text-xs text-muted">
             No assets yet. Import media or add a generated field.

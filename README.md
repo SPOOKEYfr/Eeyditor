@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-89%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-91%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -45,7 +45,7 @@ or missing (see [Known limits](#known-limits)).
 | Real waveforms, track mixer, multi-select (shift/ctrl + marquee), clipboard | ✅ working |
 | Clip link groups (move/trim/split/delete together) | ✅ working |
 | Clip and track locking (blocks timeline edits) | ✅ working |
-| SRT subtitle import, monitor overlay and burn-in | ✅ working |
+| SRT subtitles with per-cue position, size and colour | ✅ working |
 | CI (typecheck, tests, build, cargo check) | ✅ configured |
 | Blend modes in monitor and export | ✅ working (13 modes) |
 | Animated GIF and audio-only MP3 export | ✅ working |
@@ -183,7 +183,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (89 tests)
+npm run test           # Vitest (91 tests)
 npm run e2e            # real FFmpeg renders through the export plan
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
@@ -196,10 +196,10 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 89 / 89 passed             |
+| `vitest run`         | 91 / 91 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
-| FFmpeg end-to-end    | 40 / 40 checks passed      |
+| FFmpeg end-to-end    | 43 / 43 checks passed      |
 | GitHub Actions CI    | web + Rust jobs            |
 
 `npm run e2e` (`tools/e2e/`) drives the real `buildFfmpegPlan` output through
@@ -208,7 +208,7 @@ animated opacity, text overlays, audio mixing, the full demo project
 (1920×1080 / 60 fps / H.264 + AAC, 24 s), wipe/slide geometry (per-column luma),
 zoom geometry (corner luma shift), subtitle burn-in, reversed clips (mirrored
 frames), the GIF palette chain, blend modes, `.cube` LUT grading and the
-audio-only MP3 preset.
+audio-only MP3 preset, plus per-cue subtitle placement.
 
 ## Roadmap
 
@@ -237,8 +237,8 @@ audio-only MP3 preset.
   work happens on the capped preview scratch buffer.
 - Zoom transitions scale about the clip anchor with a simultaneous fade; the
   export scales the padded frame per frame rather than re-cropping the source.
-- Subtitle styling is fixed (white, bottom-centred, translucent box); there is no
-  per-cue font or position control yet.
+- Subtitles support per-cue vertical position, size scale and colour, but the
+  font family is fixed and there is no word-level animation.
 - Clip link groups are created manually; importing a file does not auto-split its
   audio into a linked track.
 - Reversed clips render backwards in the export; the monitor previews them as a

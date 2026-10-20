@@ -240,7 +240,21 @@ for (const [kind, direction] of [
   report(Boolean(baseline && lutted) && complement, `lut-inverts (before=${before.join(",")} after=${after.join(",")})`);
 }
 
-// 14. Animated GIF preset emits a real GIF.
+// 14. Per-cue subtitle position changes where the text is burned in.
+{
+  const burn = (position: "bottom" | "top") => {
+    const project = createEmptyProject("Cue");
+    project.duration = 2;
+    project.subtitles = [{ id: "c", start: 0, end: 2, text: "Positioned", position, sizeScale: 1.4 }];
+    return render(project, `cue-${position}`);
+  };
+  const low = burn("bottom");
+  const high = burn("top");
+  const distanceCue = low && high ? distance(sample(low, 1), sample(high, 1)) : 0;
+  report(Boolean(low && high) && distanceCue > 20, `subtitle-position (delta=${distanceCue})`);
+}
+
+// 15. Animated GIF preset emits a real GIF.
 {
   const { project } = generatorProject();
   project.duration = 2;
@@ -250,7 +264,7 @@ for (const [kind, direction] of [
   report(Boolean(out) && info.includes("codec_name=gif") && info.includes("width=480"), "gif-preset");
 }
 
-// 15. Audio-only preset emits an MP3 with no video stream.
+// 16. Audio-only preset emits an MP3 with no video stream.
 {
   const { project } = generatorProject("audio");
   project.duration = 2;

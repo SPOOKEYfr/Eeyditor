@@ -266,6 +266,8 @@ export interface ProjectMetadata {
   modifiedAt: string;
 }
 
+export type SubtitlePosition = "bottom" | "center" | "top";
+
 export interface SubtitleCue {
   id: string;
   /** Timeline-relative start in seconds. */
@@ -273,6 +275,12 @@ export interface SubtitleCue {
   /** Timeline-relative end in seconds. */
   end: number;
   text: string;
+  /** Vertical placement; defaults to the lower third. */
+  position?: SubtitlePosition;
+  /** Multiplier over the default font size (0.5..2). */
+  sizeScale?: number;
+  /** CSS-style hex text colour. */
+  color?: string;
 }
 
 export interface EeyditorProject {
