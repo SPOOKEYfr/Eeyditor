@@ -375,6 +375,21 @@ class EditorStore {
     }), "Unlinked clips");
   }
 
+  /** Replace or extend the multi-selection (used by the timeline marquee). */
+  setClipSelection(clipIds: string[], additive = false): void {
+    const selected = additive ? new Set(this.state.selectedClipIds) : new Set<string>();
+    for (const id of clipIds) selected.add(id);
+    const ids = [...selected];
+    const track = this.state.project.tracks.find((candidate) =>
+      candidate.clips.some((clip) => clip.id === ids[0]),
+    );
+    this.patch({
+      selectedClipId: ids[0] ?? null,
+      selectedClipIds: ids,
+      selectedTrackId: track?.id ?? this.state.selectedTrackId,
+    });
+  }
+
   toggleClipSelection(clipId: string): void {
     const track = this.state.project.tracks.find((candidate) =>
       candidate.clips.some((clip) => clip.id === clipId),

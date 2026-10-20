@@ -62,6 +62,12 @@ export function findClipAt(track: TimelineTrack, time: number): TimelineClip | n
   return null;
 }
 
+/** Clips intersecting an inclusive time window, used by the marquee selection. */
+export function clipsInTimeRange(clips: TimelineClip[], start: number, end: number): TimelineClip[] {
+  if (end < start) return clipsInTimeRange(clips, end, start);
+  return clips.filter((clip) => clip.start <= end && clipEnd(clip) >= start);
+}
+
 export function findClipById(
   project: EeyditorProject,
   clipId: string,

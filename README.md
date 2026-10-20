@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-76%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-78%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -42,7 +42,7 @@ or missing (see [Known limits](#known-limits)).
 | Deterministic FFmpeg export (verified end-to-end) | ✅ working |
 | Transitions in monitor and export | ✅ fade, dissolve, zoom, wipe, slide |
 | Effect stack in monitor and export | ✅ working (core subset, incl. chroma key) |
-| Real waveforms, track mixer, multi-select, clipboard | ✅ working |
+| Real waveforms, track mixer, multi-select (shift/ctrl + marquee), clipboard | ✅ working |
 | Clip link groups (move/trim/split/delete together) | ✅ working |
 | SRT subtitle import, monitor overlay and burn-in | ✅ working |
 | CI (typecheck, tests, build, cargo check) | ✅ configured |
@@ -180,7 +180,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (76 tests)
+npm run test           # Vitest (78 tests)
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
 npm run tauri:dev      # desktop app
@@ -192,7 +192,7 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 76 / 76 passed             |
+| `vitest run`         | 78 / 78 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
 | FFmpeg end-to-end    | 11 / 11 renders passed     |
@@ -235,7 +235,6 @@ by sampling per-column luma across the transition.
   audio into a linked track.
 - `reversed` playback and non-normal `blendMode` values are persisted by the
   schema but are not rendered yet.
-- Selection uses shift/ctrl clicks plus group move; there is no marquee drag.
 - Timeline waveforms require the desktop host to decode audio; browser-only
   development falls back to synthesized peaks.
 - Release bundles are produced only when a `v*` tag is pushed; this revision

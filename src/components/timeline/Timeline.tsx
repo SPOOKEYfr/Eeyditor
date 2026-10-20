@@ -15,6 +15,7 @@ import {
   useEditorSelector,
 } from "../../state/editorStore";
 import {
+  clipsInTimeRange,
   collectSnapTargets,
   formatTimecode,
   SNAP_THRESHOLD_PX,
@@ -224,8 +225,16 @@ export function Timeline() {
         (candidate) => time >= candidate.start && time < candidate.start + candidate.duration,
       );
       if (!clip) {
-        editorStore.selectClip(null);
-        editorStore.selectTrack(lane.track.id);
+        if (state.tool === "blade") return;
+        dragRef.current = {
+          mode: "marquee",
+          x0: x,
+          y0: y,
+          x1: x,
+          y1: y,
+          additive: event.shiftKey || event.metaKey || event.ctrlKey,
+        };
+        if (!dragRef.current.additive) editorStore.setClipSelection([]);
         return;
       }
 
@@ -267,6 +276,17 @@ export function Timeline() {
         return;
       }
 
+      if (drag.mode === "marquee") {
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const rect = canvas.getBoundingClientRect();
+          drag.x1 = event.clientX - rect.left;
+          drag.y1 = event.clientY - rect.top;
+        }
+        snapLineRef.current = null;
+        return;
+      }
+
       if (state.snapEnabled && drag.clipId) {
         const targets = collectSnapTargets(state.project, drag.clipId);
         const result = snapTime(time, targets, SNAP_THRESHOLD_PX / state.zoom);
@@ -290,7 +310,25 @@ export function Timeline() {
     const drag = dragRef.current;
     dragRef.current = null;
     snapLineRef.current = null;
-    if (drag && drag.mode !== "playhead") {
+    if (!drag) return;
+    if (drag.mode === "marquee") {
+      const bounds = marqueeBounds(drag);
+      const state = editorStore.getState();
+      const left = xToTime(bounds.left, state.zoom, state.scroll);
+      const right = xToTime(bounds.right, state.zoom, state.scroll);
+      const lanes = computeLanes(state.project.tracks, scrollYRef.current);
+      const hits: string[] = [];
+      for (const lane of lanes) {
+        if (lane.track.hidden) continue;
+        const top = lane.y + 3;
+        const bottom = lane.y + lane.height - 3;
+        if (bottom < bounds.top || top > bounds.bottom) continue;
+        for (const clip of clipsInTimeRange(lane.track.clips, left, right)) hits.push(clip.id);
+      }
+      editorStore.setClipSelection(hits, drag.additive ?? false);
+      return;
+    }
+    if (drag.mode !== "playhead") {
       editorStore.commitInteraction(drag.mode === "move" ? "Moved clip" : "Trimmed clip");
     }
   }, []);
@@ -339,9 +377,27 @@ export function Timeline() {
 }
 
 interface DragState {
-  mode: "playhead" | "move" | "trim-start" | "trim-end";
+  mode: "playhead" | "move" | "trim-start" | "trim-end" | "marquee";
   clipId?: string;
   grabOffset?: number;
+  x0?: number;
+  y0?: number;
+  x1?: number;
+  y1?: number;
+  additive?: boolean;
+}
+
+function marqueeBounds(drag: DragState): { left: number; top: number; right: number; bottom: number } {
+  const x0 = drag.x0 ?? 0;
+  const y0 = drag.y0 ?? 0;
+  const x1 = drag.x1 ?? x0;
+  const y1 = drag.y1 ?? y0;
+  return {
+    left: Math.min(x0, x1),
+    top: Math.min(y0, y1),
+    right: Math.max(x0, x1),
+    bottom: Math.max(y0, y1),
+  };
 }
 
 function renderTimeline(
@@ -421,6 +477,16 @@ function renderTimeline(
     ctx.shadowBlur = 10;
     ctx.fillRect(px - 1.5, RULER_HEIGHT, 3, height - RULER_HEIGHT);
     ctx.shadowBlur = 0;
+  }
+
+  // Selection marquee.
+  if (drag?.mode === "marquee") {
+    const bounds = marqueeBounds(drag);
+    ctx.fillStyle = "rgba(255,179,0,0.12)";
+    ctx.fillRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
+    ctx.strokeStyle = "rgba(255,179,0,0.75)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
   }
 
   void drag;

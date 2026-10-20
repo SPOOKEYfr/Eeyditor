@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   clipEnd,
+  clipsInTimeRange,
   closeGaps,
   formatTimecode,
   moveClip,
@@ -97,6 +98,14 @@ describe("timeline engine", () => {
     const trimmedEnd = trimClip(clip, "end", 6);
     expect(trimmedEnd.duration).toBeCloseTo(4, 6);
     expect(trimmedEnd.outPoint).toBeCloseTo(4, 6);
+  });
+
+  it("collects clips intersecting a marquee time window", () => {
+    const clips = [clipAt("t", 0, 2), clipAt("t", 3, 2), clipAt("t", 8, 1)];
+    expect(clipsInTimeRange(clips, 0.5, 3.5).map((clip) => clip.start)).toEqual([0, 3]);
+    expect(clipsInTimeRange(clips, 2.1, 2.9)).toEqual([]);
+    expect(clipsInTimeRange(clips, 3.5, 3).map((clip) => clip.start)).toEqual([3]);
+    expect(clipsInTimeRange(clips, 0, 20)).toHaveLength(3);
   });
 
   it("creates tracks with type-specific heights", () => {

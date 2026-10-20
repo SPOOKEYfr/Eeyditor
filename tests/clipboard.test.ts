@@ -98,6 +98,19 @@ describe("clip clipboard", () => {
     expect(clipCount()).toBe(0);
   });
 
+  it("replaces or extends the marquee selection", () => {
+    editorStore.loadProject(createEmptyProject());
+    const track = editorStore.getState().project.tracks[0];
+    const first = editorStore.addClip(track.id, 0);
+    const second = editorStore.addClip(track.id, 4);
+    editorStore.setClipSelection([first, second]);
+    expect(editorStore.getState().selectedClipIds).toEqual([first, second]);
+    editorStore.setClipSelection([first]);
+    editorStore.setClipSelection([second], true);
+    expect(editorStore.getState().selectedClipIds).toEqual([first, second]);
+    expect(editorStore.getState().selectedClipId).toBe(first);
+  });
+
   it("sets and clears clip transitions", () => {
     editorStore.loadProject(createEmptyProject());
     const track = editorStore.getState().project.tracks[0];
