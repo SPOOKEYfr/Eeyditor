@@ -1,5 +1,5 @@
 import { Sparkles, Trash2 } from "lucide-react";
-import type { EffectKind, TimelineClip, TransitionKind } from "../../types/timeline";
+import type { BlendMode, EffectKind, TimelineClip, TransitionKind } from "../../types/timeline";
 
 type TransformProperty =
   | "opacity"
@@ -11,6 +11,22 @@ type TransformProperty =
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { createEffect } from "../../core/project/factory";
 import { NeumorphicPanel, NeumorphicSlider } from "../neumorphic";
+
+const BLEND_MODES: BlendMode[] = [
+  "normal",
+  "multiply",
+  "screen",
+  "overlay",
+  "darken",
+  "lighten",
+  "color-dodge",
+  "color-burn",
+  "hard-light",
+  "soft-light",
+  "difference",
+  "exclusion",
+  "add",
+];
 
 const EFFECT_KINDS: EffectKind[] = [
   "blur",
@@ -84,6 +100,29 @@ export function Inspector() {
           <NeumorphicSlider label="Position X" min={-0.5} max={0.5} step={0.005} value={clip.transform.positionX.defaultValue} onChange={(v) => setCurveDefault("positionX", v)} />
           <NeumorphicSlider label="Position Y" min={-0.5} max={0.5} step={0.005} value={clip.transform.positionY.defaultValue} onChange={(v) => setCurveDefault("positionY", v)} />
           <NeumorphicSlider label="Rotation" min={-180} max={180} step={1} value={clip.transform.rotation.defaultValue} formatValue={(v) => `${v.toFixed(0)}°`} onChange={(v) => setCurveDefault("rotation", v)} />
+          <label className="block text-[10px] uppercase tracking-wider text-muted">
+            Blend
+            <select
+              value={clip.transform.blendMode}
+              onChange={(event) =>
+                editorStore.updateClip(
+                  clip.id,
+                  (current) => ({
+                    ...current,
+                    transform: { ...current.transform, blendMode: event.target.value as BlendMode },
+                  }),
+                  "Changed blend mode",
+                )
+              }
+              className="mt-1 w-full rounded-lg bg-recessed px-2 py-1 text-[11px] text-ink shadow-recessed-sm outline-none"
+            >
+              {BLEND_MODES.map((mode) => (
+                <option key={mode} value={mode}>
+                  {mode}
+                </option>
+              ))}
+            </select>
+          </label>
         </Section>
 
         <Section title="Timing">

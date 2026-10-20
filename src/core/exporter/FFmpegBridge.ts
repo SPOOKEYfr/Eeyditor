@@ -1,4 +1,5 @@
 import type {
+  BlendMode,
   EeyditorProject,
   KeyframeCurve,
   MediaSource,
@@ -379,9 +380,24 @@ export function buildFfmpegPlan(
     const yExpr = `(H*(0.5+(${posY}))-h*${f(clip.transform.anchorY)}${slide.y})`;
     const enable = `enable=${escapeFilterGraph(`between(t,${f(clip.start)},${f(clipEnd(clip))})`)}`;
     const next = `[v${videoCounter}]`;
-    filters.push(
-      `${videoCursor}[${label}]overlay=x=${escapeFilterGraph(xExpr)}:y=${escapeFilterGraph(yExpr)}:${enable}:eval=frame:format=auto:shortest=0${next}`,
-    );
+    const overlayArgs = `x=${escapeFilterGraph(xExpr)}:y=${escapeFilterGraph(yExpr)}:${enable}:eval=frame:format=auto:shortest=0`;
+    const blendMode = clip.transform.blendMode;
+    if (blendMode && blendMode !== "normal") {
+      // Blend the clip into the canvas, then composite the blended result back
+      // through the clip's own alpha so transparent regions stay untouched.
+      const blended = `${label}blend`;
+      const masked = `${label}blended`;
+      const alpha = `${label}alpha`;
+      const main = `${label}main`;
+      filters.push(`${videoCursor}format=rgba,split[${blended}base][${main}]`);
+      filters.push(`[${label}]format=rgba,split[${blended}clip][${alpha}src]`);
+      filters.push(`[${blended}base][${blended}clip]blend=all_mode=${FFMPEG_BLEND[blendMode]}[${blended}]`);
+      filters.push(`[${alpha}src]alphaextract[${alpha}]`);
+      filters.push(`[${blended}][${alpha}]alphamerge[${masked}]`);
+      filters.push(`[${main}][${masked}]overlay=${overlayArgs}${next}`);
+    } else {
+      filters.push(`${videoCursor}[${label}]overlay=${overlayArgs}${next}`);
+    }
     videoCursor = next;
   }
 
@@ -618,6 +634,22 @@ function effectFilter(kind: string, amount: number): string {
       return "null";
   }
 }
+
+const FFMPEG_BLEND: Record<BlendMode, string> = {
+  normal: "normal",
+  multiply: "multiply",
+  screen: "screen",
+  overlay: "overlay",
+  darken: "darken",
+  lighten: "lighten",
+  "color-dodge": "dodge",
+  "color-burn": "burn",
+  "hard-light": "hardlight",
+  "soft-light": "softlight",
+  difference: "difference",
+  exclusion: "exclusion",
+  add: "addition",
+};
 
 function videoCodecArgs(preset: RenderPreset): string[] {
   if (preset.videoCodec === "gif") {

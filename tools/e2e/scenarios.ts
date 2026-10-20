@@ -170,7 +170,57 @@ for (const [kind, direction] of [
   }
 }
 
-// 11. Animated GIF preset emits a real GIF.
+// 11. A screen-blended clip lightens the black canvas; multiply leaves it black.
+{
+  const insideWindow = (mode: "screen" | "multiply") => {
+    const { project, clip } = generatorProject();
+    clip.start = 1.5;
+    clip.duration = 1.5;
+    clip.outPoint = 1.5;
+    clip.transform.blendMode = mode;
+    project.duration = 3;
+    const out = render(project, `blend-${mode}`);
+    if (!out) return null;
+    return {
+      inside: sample(out, 2.2, "1:1")[1] ?? 0,
+      outside: sample(out, 0.5, "1:1")[1] ?? 0,
+    };
+  };
+  const screen = insideWindow("screen");
+  const multiply = insideWindow("multiply");
+  report(
+    Boolean(screen) && screen.inside > screen.outside && screen.inside > 20,
+    `screen-blend-lightens (inside=${screen?.inside} outside=${screen?.outside})`,
+  );
+  report(
+    Boolean(multiply) && multiply.inside <= 2,
+    `multiply-blend-on-black (inside=${multiply?.inside})`,
+  );
+}
+
+// 12. Multiply blends against the layer underneath, not just the black canvas.
+{
+  const project = createEmptyProject("BlendStack");
+  project.duration = 3;
+  const source = createMediaSource({ path: "generator://stack", kind: "generator", name: "G", duration: 8, hasVideo: true, hasAudio: false });
+  project.media = [source];
+  const video = videoTrack(project);
+  const base = createClip({ trackId: video.id, sourceId: source.id, start: 0, duration: 3, kind: "generator" });
+  video.clips = [base];
+  const overlayTrack = project.tracks.find((entry) => entry.type === "overlay");
+  if (overlayTrack) {
+    const top = createClip({ trackId: overlayTrack.id, sourceId: source.id, start: 1.5, duration: 1.5, kind: "generator" });
+    top.outPoint = 1.5;
+    top.transform.blendMode = "multiply";
+    overlayTrack.clips = [top];
+  }
+  const out = render(project, "blend-stack");
+  const inside = out ? sample(out, 2.2, "1:1")[1] ?? 0 : 0;
+  const outside = out ? sample(out, 0.5, "1:1")[1] ?? 0 : 0;
+  report(Boolean(out) && inside < outside && outside > 20, `multiply-over-layer (inside=${inside} outside=${outside})`);
+}
+
+// 13. Animated GIF preset emits a real GIF.
 {
   const { project } = generatorProject();
   project.duration = 2;
@@ -180,7 +230,7 @@ for (const [kind, direction] of [
   report(Boolean(out) && info.includes("codec_name=gif") && info.includes("width=480"), "gif-preset");
 }
 
-// 12. Audio-only preset emits an MP3 with no video stream.
+// 14. Audio-only preset emits an MP3 with no video stream.
 {
   const { project } = generatorProject("audio");
   project.duration = 2;

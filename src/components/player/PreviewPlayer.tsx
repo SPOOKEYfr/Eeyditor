@@ -29,7 +29,7 @@ import {
 } from "../../core/timeline/transitions";
 import { convertMediaUrl } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
-import type { MediaSource, TimelineClip, TimelineTrack } from "../../types/timeline";
+import type { BlendMode, MediaSource, TimelineClip, TimelineTrack } from "../../types/timeline";
 
 const BRAND_STOPS = ["#FFB300", "#FF5100", "#E60067"];
 
@@ -111,6 +111,26 @@ function renderRect(width: number, height: number, aspect: number): FrameRect {
   return { x: (width - w) / 2, y: (height - h) / 2, w, h };
 }
 
+const CANVAS_BLEND: Record<BlendMode, GlobalCompositeOperation> = {
+  normal: "source-over",
+  multiply: "multiply",
+  screen: "screen",
+  overlay: "overlay",
+  darken: "darken",
+  lighten: "lighten",
+  "color-dodge": "color-dodge",
+  "color-burn": "color-burn",
+  "hard-light": "hard-light",
+  "soft-light": "soft-light",
+  difference: "difference",
+  exclusion: "exclusion",
+  add: "lighter",
+};
+
+function compositeFor(mode: BlendMode | undefined): GlobalCompositeOperation {
+  return mode ? CANVAS_BLEND[mode] ?? "source-over" : "source-over";
+}
+
 function drawTextClip(
   ctx: CanvasRenderingContext2D,
   clip: TimelineClip,
@@ -133,6 +153,7 @@ function drawTextClip(
 
   ctx.save();
   ctx.globalAlpha = clamp01(opacity);
+  ctx.globalCompositeOperation = compositeFor(clip.transform.blendMode);
   ctx.translate(rect.x + rect.w * (0.5 + posX), rect.y + rect.h * (0.5 + posY));
   ctx.rotate((rotation * Math.PI) / 180);
   const zoom = zoomFactor(clip, local);
@@ -193,6 +214,7 @@ function drawMediaClip(
     ctx.clip();
   }
   ctx.globalAlpha = clamp01(opacity);
+  ctx.globalCompositeOperation = compositeFor(clip.transform.blendMode);
   ctx.translate(
     rect.x + rect.w * (0.5 + posX) + slide.dx,
     rect.y + rect.h * (0.5 + posY) + slide.dy,
@@ -297,6 +319,7 @@ function drawPlaceholder(
 
   ctx.save();
   ctx.globalAlpha = clamp01(opacity);
+  ctx.globalCompositeOperation = compositeFor(clip.transform.blendMode);
   ctx.translate(rect.x + rect.w * (0.5 + posX), rect.y + rect.h * (0.5 + posY));
   ctx.rotate((rotation * Math.PI) / 180);
   const zoom = zoomFactor(clip, local);

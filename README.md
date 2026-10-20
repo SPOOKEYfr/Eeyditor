@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-82%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-83%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -47,6 +47,7 @@ or missing (see [Known limits](#known-limits)).
 | Clip and track locking (blocks timeline edits) | ✅ working |
 | SRT subtitle import, monitor overlay and burn-in | ✅ working |
 | CI (typecheck, tests, build, cargo check) | ✅ configured |
+| Blend modes in monitor and export | ✅ working (13 modes) |
 | Animated GIF and audio-only MP3 export | ✅ working |
 | Release bundles on `v*` tags (draft) | ✅ configured |
 | Auto-update | ❌ not yet |
@@ -182,7 +183,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (82 tests)
+npm run test           # Vitest (83 tests)
 npm run e2e            # real FFmpeg renders through the export plan
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
@@ -195,10 +196,10 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 82 / 82 passed             |
+| `vitest run`         | 83 / 83 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
-| FFmpeg end-to-end    | 31 / 31 checks passed      |
+| FFmpeg end-to-end    | 37 / 37 checks passed      |
 | GitHub Actions CI    | web + Rust jobs            |
 
 `npm run e2e` (`tools/e2e/`) drives the real `buildFfmpegPlan` output through
@@ -206,7 +207,7 @@ FFmpeg and checks the artefacts: empty and generator timelines, keyframed scale,
 animated opacity, text overlays, audio mixing, the full demo project
 (1920×1080 / 60 fps / H.264 + AAC, 24 s), wipe/slide geometry (per-column luma),
 zoom geometry (corner luma shift), subtitle burn-in, reversed clips (mirrored
-frames), the GIF palette chain and the audio-only MP3 preset.
+frames), the GIF palette chain, blend modes and the audio-only MP3 preset.
 
 ## Roadmap
 
@@ -237,8 +238,6 @@ frames), the GIF palette chain and the audio-only MP3 preset.
   per-cue font or position control yet.
 - Clip link groups are created manually; importing a file does not auto-split its
   audio into a linked track.
-- Non-normal `blendMode` values are persisted by the schema but are not rendered
-  yet.
 - Reversed clips render backwards in the export; the monitor previews them as a
   muted frame scrub because browsers cannot decode audio backwards.
 - Timeline waveforms require the desktop host to decode audio; browser-only

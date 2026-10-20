@@ -51,6 +51,27 @@ describe("ffmpeg export pipeline", () => {
     expect(slidePlan.filterComplex).toContain("1-(t-");
   });
 
+  it("blends non-normal clip modes through an alpha-masked blend pass", () => {
+    const project = createEmptyProject();
+    const track = project.tracks.find((entry) => entry.type === "video");
+    if (!track) throw new Error("missing video track");
+    const clip = createClip({ trackId: track.id, start: 0, duration: 3, kind: "video" });
+    clip.transform.blendMode = "multiply";
+    track.clips = [clip];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("blend=all_mode=multiply");
+    expect(plan.filterComplex).toContain("alphaextract");
+    expect(plan.filterComplex).toContain("alphamerge");
+
+    clip.transform.blendMode = "color-dodge";
+    const dodge = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(dodge.filterComplex).toContain("blend=all_mode=dodge");
+
+    clip.transform.blendMode = "normal";
+    const normal = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(normal.filterComplex).not.toContain("alphaextract");
+  });
+
   it("builds a GIF palette chain and drops the audio stream", () => {
     const project = createEmptyProject();
     project.renderPreset = { ...RENDER_PRESETS.find((preset) => preset.id === "gif-480p12")! };
