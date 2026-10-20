@@ -537,5 +537,31 @@ describe("marker management", () => {
     expect(editorStore.getState().project.markers).toHaveLength(0);
   });
 });
+
+
+describe("track reordering", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+  });
+
+  it("moves a track to a new slot and keeps all tracks intact", () => {
+    const ids = editorStore.getState().project.tracks.map((track) => track.id);
+    const first = ids[0];
+    editorStore.reorderTrack(first, 3);
+    const order = editorStore.getState().project.tracks.map((track) => track.id);
+    expect(order).toHaveLength(ids.length);
+    expect(order[2]).toBe(first);
+  });
+
+  it("refuses unknown track ids and clamps wild indices", () => {
+    const before = editorStore.getState().project.tracks.map((track) => track.id);
+    editorStore.reorderTrack("nonexistent", 2);
+    expect(editorStore.getState().project.tracks.map((track) => track.id)).toEqual(before);
+    editorStore.reorderTrack(before[0], 999);
+    const after = editorStore.getState().project.tracks.map((track) => track.id);
+    expect(after).toHaveLength(before.length);
+    expect(after[after.length - 1]).toBe(before[0]);
+  });
+});
 });
 

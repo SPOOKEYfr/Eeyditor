@@ -219,6 +219,48 @@ export function Timeline() {
   }, []);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
+  const [reorderLine, setReorderLine] = useState<number | null>(null);
+  const reorderRef = useRef<{ id: string; from: number } | null>(null);
+  const trackStackRef = useRef<HTMLDivElement | null>(null);
+
+  const beginTrackReorder = useCallback((trackId: string) => {
+    const from = editorStore.getState().project.tracks.findIndex((track) => track.id === trackId);
+    if (from < 0) return;
+    const container = trackStackRef.current;
+    if (!container) return;
+    reorderRef.current = { id: trackId, from };
+
+    const items = () =>
+      Array.from(container.querySelectorAll<HTMLElement>("[data-track-id]")).map((node) => {
+        const rect = node.getBoundingClientRect();
+        return { top: rect.top, mid: rect.top + rect.height / 2, bottom: rect.bottom };
+      });
+
+    const containerTop = container.getBoundingClientRect().top;
+    const onMove = (event: PointerEvent) => {
+      const list = items();
+      if (!list.length) return;
+      const index = Math.max(0, Math.min(list.filter((item) => item.mid < event.clientY).length, list.length));
+      const boundary = index === 0 ? list[0].top : list[index - 1].bottom;
+      setReorderLine(boundary - containerTop);
+    };
+    const onUp = (event: PointerEvent) => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      const list = items();
+      setReorderLine(null);
+      const saved = reorderRef.current;
+      reorderRef.current = null;
+      if (!list.length || !saved) return;
+      const index = Math.max(0, Math.min(list.filter((item) => item.mid < event.clientY).length, list.length));
+      if (index === from || index === from + 1) return;
+      editorStore.reorderTrack(saved.id, index);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }, []);
 
   const handleContextMenu = useCallback((event: React.MouseEvent) => {
     const canvas = canvasRef.current;
@@ -536,15 +578,27 @@ export function Timeline() {
           >
             <TimecodeReadout />
           </div>
-          <div className="overflow-hidden" style={{ transform: `translateY(${-scrollY}px)` }}>
+          <div
+            ref={trackStackRef}
+            className="overflow-hidden relative"
+            style={{ transform: `translateY(${-scrollY}px)` }}
+          >
             {tracks.map((track) => (
-              <TrackHeader
-                key={track.id}
-                track={track}
-                selected={track.id === selectedTrackId}
-                height={track.height + LANE_GAP}
-              />
+              <div key={track.id} data-track-id={track.id}>
+                <TrackHeader
+                  track={track}
+                  selected={track.id === selectedTrackId}
+                  height={track.height + LANE_GAP}
+                  onReorderStart={() => beginTrackReorder(track.id)}
+                />
+              </div>
             ))}
+            {reorderLine !== null && (
+              <div
+                className="pointer-events-none absolute left-0 z-10 h-0.5 w-full"
+                style={{ top: reorderLine - 1, background: "#FFB300" }}
+              />
+            )}
           </div>
         </div>
         <div ref={wrapRef} className="relative min-h-0 flex-1">

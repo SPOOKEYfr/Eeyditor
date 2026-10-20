@@ -647,6 +647,18 @@ class EditorStore {
     }), "Duplicated clip");
   }
 
+  /** Move a track to a new insertion slot (original-list coordinates). */
+  reorderTrack(trackId: string, toIndex: number): void {
+    this.updateProject((project) => {
+      const from = project.tracks.findIndex((track) => track.id === trackId);
+      if (from < 0) return project;
+      const tracks = project.tracks.filter((_, i) => i !== from);
+      const adjusted = toIndex > from ? toIndex - 1 : toIndex;
+      tracks.splice(Math.max(0, Math.min(adjusted, tracks.length)), 0, project.tracks[from]);
+      return { ...project, tracks };
+    }, "Reordered tracks");
+  }
+
   removeTrack(trackId: string): void {
     if (this.state.project.tracks.find((track) => track.id === trackId)?.locked) {
       this.patch({ status: "Track is locked" });

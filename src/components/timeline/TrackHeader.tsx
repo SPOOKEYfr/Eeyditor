@@ -1,5 +1,6 @@
 import {
   Copy,
+  GripVertical,
   Eye,
   EyeOff,
   Headphones,
@@ -26,9 +27,10 @@ export interface TrackHeaderProps {
   track: TimelineTrack;
   selected: boolean;
   height: number;
+  onReorderStart?: (event: React.PointerEvent) => void;
 }
 
-export function TrackHeader({ track, selected, height }: TrackHeaderProps) {
+export function TrackHeader({ track, selected, height, onReorderStart }: TrackHeaderProps) {
   const toggle = (recipe: (track: TimelineTrack) => TimelineTrack) => {
     editorStore.updateProject((project) => ({
       ...project,
@@ -44,13 +46,25 @@ export function TrackHeader({ track, selected, height }: TrackHeaderProps) {
   return (
     <div
       className={cn(
-        "flex flex-col justify-center gap-1 border-b border-black/40 px-2",
+        "flex flex-col justify-center gap-1 border-b border-black/40 px-1",
         selected ? "bg-surface" : "bg-[#15161d]",
       )}
       style={{ height }}
       onClick={() => editorStore.selectTrack(track.id)}
     >
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          title="Drag to reorder this track"
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onPointerDownCapture={(event) => {
+            if (event.button === 0) onReorderStart?.(event);
+          }}
+          className="grid h-full w-3 cursor-grab place-items-center text-muted/70 transition-colors hover:text-ink"
+        >
+          <GripVertical size={11} />
+        </button>
         <span
           className="h-6 w-1 rounded-full"
           style={{ background: TYPE_ACCENT[track.type] }}
