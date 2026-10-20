@@ -667,6 +667,21 @@ class EditorStore {
   }
 
   /** Place a media source on a specific track at a specific time, overwriting overlaps. */
+  /** Remove a media source; refused while any clip still references it. */
+  removeSource(sourceId: string): void {
+    const used = this.state.project.tracks.some((track) =>
+      track.clips.some((clip) => clip.sourceId === sourceId),
+    );
+    if (used) {
+      this.patch({ status: "Remove its clips before deleting the asset" });
+      return;
+    }
+    this.updateProject(
+      (project) => ({ ...project, media: project.media.filter((entry) => entry.id !== sourceId) }),
+      "Removed asset",
+    );
+  }
+
   addSourceAt(sourceId: string, trackId: string, start: number): void {
     const track = this.state.project.tracks.find((candidate) => candidate.id === trackId);
     if (!track) {

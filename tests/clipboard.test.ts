@@ -411,5 +411,36 @@ describe("numeric clip timing", () => {
     expect(shorter.duration).toBeLessThanOrEqual(0.05);
   });
 });
+
+
+describe("media asset management", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+  });
+
+  it("removes unused assets and refuses used ones", () => {
+    const source = createMediaSource({ path: "generator://u", kind: "video", name: "U", duration: 2, hasVideo: true, hasAudio: false });
+    editorStore.updateProject((project) => ({ ...project, media: [source] }), "seed");
+    const video = editorStore.getState().project.tracks.find((track) => track.type === "video")!;
+    const clip = createClip({ trackId: video.id, start: 0, duration: 1, kind: "video" });
+    editorStore.updateProject(
+      (project) => ({
+        ...project,
+        tracks: project.tracks.map((track) => (track.id === video.id ? { ...track, clips: [{ ...clip, sourceId: source.id }] } : track)),
+      }),
+      "seed clip",
+    );
+    editorStore.removeSource(source.id);
+    expect(editorStore.getState().status).toBe("Remove its clips before deleting the asset");
+    expect(editorStore.getState().project.media).toHaveLength(1);
+
+    editorStore.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((track) => (track.id === video.id ? { ...track, clips: [] } : track)),
+    }), "clear clips");
+    editorStore.removeSource(source.id);
+    expect(editorStore.getState().project.media).toHaveLength(0);
+  });
+});
 });
 

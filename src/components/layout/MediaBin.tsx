@@ -54,6 +54,7 @@ function iconForKind(kind: SourceKind): React.ReactNode {
 export function MediaBin() {
   const media = useEditorSelector((state) => state.project.media);
   const subtitles = useEditorSelector((state) => state.project.subtitles);
+  const [filter, setFilter] = useState("");
   const [, setThumbVersion] = useState(0);
 
   useEffect(() => {
@@ -251,6 +252,15 @@ export function MediaBin() {
       </>
     }>
       <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
+        {media.length >= 5 && (
+          <input
+            type="search"
+            placeholder="Search assets"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            className="w-full rounded-lg bg-recessed px-2 py-1.5 text-[11px] text-ink shadow-recessed-sm outline-none placeholder:text-muted"
+          />
+        )}
         <div className="flex items-center gap-1.5 rounded-lg bg-recessed px-2 py-1.5 text-[10px] text-muted shadow-recessed-sm">
           <span className="flex-1">{subtitles.length} subtitle cues</span>
           <button type="button" onClick={handleAddCue} className="transition-colors hover:text-ink">
@@ -368,9 +378,11 @@ export function MediaBin() {
             No assets yet. Import media or add a generated field.
           </p>
         )}
-        {media.map((source) => (
-          <button
-            key={source.id}
+        {media
+          .filter((source) => !filter.trim() || source.name.toLowerCase().includes(filter.trim().toLowerCase()))
+          .map((source) => (
+          <div key={source.id} className="flex items-stretch gap-1">
+            <button
             type="button"
             draggable
             onDragStart={(event) => {
@@ -382,7 +394,7 @@ export function MediaBin() {
             onDragEnd={() => setDragSource(null)}
             onClick={() => addToTimeline(source)}
             title="Drag onto a timeline lane or click to add at the playhead"
-            className="flex w-full items-center gap-2 rounded-xl bg-recessed px-2.5 py-2 text-left shadow-recessed-sm transition-colors hover:bg-surface"
+            className="flex flex-1 items-center gap-2 rounded-xl bg-recessed px-2.5 py-2 text-left shadow-recessed-sm transition-colors hover:bg-surface"
           >
             <span className="grid h-9 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface text-amber shadow-raised-sm">
               {thumbnailCache.get(source.id) ? (
@@ -402,6 +414,15 @@ export function MediaBin() {
               </span>
             </span>
           </button>
+            <button
+              type="button"
+              title="Remove unused asset"
+              onClick={() => editorStore.removeSource(source.id)}
+              className="grid w-5 shrink-0 place-items-center rounded-lg bg-recessed text-muted shadow-recessed-sm transition-colors hover:text-magenta"
+            >
+              x
+            </button>
+          </div>
         ))}
       </div>
     </NeumorphicPanel>
