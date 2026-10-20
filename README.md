@@ -50,6 +50,7 @@ or missing (see [Known limits](#known-limits)).
 | Keyboard shortcut overlay (?, toolbar help button) | ✅ working |
 | In/out export range (timeline shading, `-ss`/`-t` trim) | ✅ working |
 | Autosave + restore prompt for unsaved sessions | ✅ working (localStorage) |
+| Composition resolution and frame-rate controls | ✅ working |
 | CI (typecheck, tests, build, cargo check) | ✅ configured |
 | Blend modes in monitor and export | ✅ working (13 modes) |
 | Animated GIF and audio-only MP3 export | ✅ working |
@@ -204,7 +205,7 @@ npm run tauri:build    # bundled desktop build
 | `vitest run`         | 101 / 101 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
-| FFmpeg end-to-end    | 51 / 51 checks passed      |
+| FFmpeg end-to-end    | 53 / 53 checks passed      |
 | GitHub Actions CI    | web + Rust jobs            |
 
 `npm run e2e` (`tools/e2e/`) drives the real `buildFfmpegPlan` output through

@@ -316,7 +316,25 @@ for (const [kind, direction] of [
   );
 }
 
-// 19. Audio-only preset emits an MP3 with no video stream.
+// 19. Vertical composition exports at its own resolution.
+{
+  const { project } = generatorProject();
+  project.duration = 2;
+  project.resolution = { width: 1080, height: 1920 };
+  project.renderPreset = {
+    ...RENDER_PRESETS.find((preset) => preset.id === "standard-1080p30")!,
+    width: 1080,
+    height: 1920,
+  };
+  const out = render(project, "vertical");
+  const info = out ? probe(out, "stream=width,height") : "";
+  report(
+    Boolean(out) && info.includes("width=1080") && info.includes("height=1920"),
+    `vertical-composition (${info.replace(/\n/g, " ")})`,
+  );
+}
+
+// 20. Audio-only preset emits an MP3 with no video stream.
 {
   const { project } = generatorProject("audio");
   project.duration = 2;

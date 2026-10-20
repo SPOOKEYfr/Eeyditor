@@ -138,6 +138,60 @@ export function ExportPanel() {
   return (
     <NeumorphicPanel title="Render & Project" className="shrink-0">
       <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-1.5">
+          <label className="block text-[10px] uppercase tracking-wider text-muted">
+            Composition
+            <select
+              value={`${project.resolution.width}x${project.resolution.height}`}
+              onChange={(event) => {
+                const [width, height] = event.target.value.split("x").map(Number);
+                editorStore.updateProject((current) => {
+                  const fixedSize = ["gif", "none"].includes(current.renderPreset.videoCodec);
+                  return {
+                    ...current,
+                    resolution: { width, height },
+                    renderPreset: fixedSize
+                      ? current.renderPreset
+                      : { ...current.renderPreset, id: "custom", name: `Custom ${width}x${height}`, width, height },
+                  };
+                }, "Changed composition");
+              }}
+              className="mt-1 w-full rounded-lg bg-recessed px-2 py-1.5 text-xs text-ink shadow-recessed-sm outline-none"
+            >
+              <option value="1920x1080">1920 x 1080</option>
+              <option value="1080x1920">1080 x 1920</option>
+              <option value="1080x1080">1080 x 1080</option>
+              <option value="1280x720">1280 x 720</option>
+              <option value="3840x2160">3840 x 2160</option>
+            </select>
+          </label>
+          <label className="block text-[10px] uppercase tracking-wider text-muted">
+            Frame rate
+            <select
+              value={project.frameRate}
+              onChange={(event) => {
+                const frameRate = Number(event.target.value);
+                editorStore.updateProject((current) => {
+                  const fixedSize = ["gif", "none"].includes(current.renderPreset.videoCodec);
+                  return {
+                    ...current,
+                    frameRate,
+                    renderPreset: fixedSize
+                      ? current.renderPreset
+                      : { ...current.renderPreset, id: "custom", name: `Custom ${frameRate}fps`, fps: frameRate },
+                  };
+                }, "Changed frame rate");
+              }}
+              className="mt-1 w-full rounded-lg bg-recessed px-2 py-1.5 text-xs text-ink shadow-recessed-sm outline-none"
+            >
+              {[24, 25, 30, 50, 60].map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate} fps
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <label className="block text-[10px] uppercase tracking-wider text-muted">
           Preset
           <select
@@ -145,6 +199,9 @@ export function ExportPanel() {
             onChange={(event) => setPreset(event.target.value)}
             className="mt-1 w-full rounded-lg bg-recessed px-2 py-1.5 text-xs text-ink shadow-recessed-sm outline-none"
           >
+            {!RENDER_PRESETS.some((preset) => preset.id === project.renderPreset.id) && (
+              <option value={project.renderPreset.id}>{project.renderPreset.name}</option>
+            )}
             {RENDER_PRESETS.map((preset) => (
               <option key={preset.id} value={preset.id}>
                 {preset.name}
