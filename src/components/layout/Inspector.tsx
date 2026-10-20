@@ -63,6 +63,7 @@ export function Inspector() {
         <p className="px-1 py-6 text-xs text-muted">
           Select a clip to inspect and refine its properties.
         </p>
+        <MarkerList />
       </NeumorphicPanel>
     );
   }
@@ -347,6 +348,8 @@ export function Inspector() {
             </div>
           ))}
         </Section>
+
+        <MarkerList />
       </div>
     </NeumorphicPanel>
   );
@@ -360,5 +363,46 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </div>
       {children}
     </div>
+  );
+}
+
+function MarkerList() {
+  const markers = useEditorSelector((state) => state.project.markers);
+  if (markers.length === 0) return null;
+  return (
+    <Section title="Markers">
+      {markers.map((marker) => (
+        <div key={marker.id} className="flex items-center gap-2 rounded-lg bg-recessed px-2 py-1 text-[10px] shadow-recessed-sm">
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: marker.color }} />
+          <button
+            type="button"
+            title="Jump to marker"
+            onClick={() => editorStore.setPlayhead(marker.time)}
+            className="flex-1 truncate text-left font-mono text-[9px] text-muted transition-colors hover:text-ink"
+          >
+            {marker.time.toFixed(2)}s {marker.label}
+          </button>
+          <button
+            type="button"
+            title="Rename marker"
+            onClick={() => {
+              const label = window.prompt("Marker label", marker.label);
+              if (label !== null) editorStore.renameMarker(marker.id, label.trim() || marker.label);
+            }}
+            className="text-muted transition-colors hover:text-ink"
+          >
+            edit
+          </button>
+          <button
+            type="button"
+            title="Delete marker"
+            onClick={() => editorStore.removeMarker(marker.id)}
+            className="text-muted transition-colors hover:text-magenta"
+          >
+            x
+          </button>
+        </div>
+      ))}
+    </Section>
   );
 }

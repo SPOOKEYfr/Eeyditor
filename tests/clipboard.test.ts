@@ -201,4 +201,15 @@ describe("clip clipboard", () => {
       .find((candidate) => candidate.id === selected);
     expect(copy?.start).toBeCloseTo((original?.start ?? 0) + (original?.duration ?? 0));
   });
+
+  it("removes and rewrites markers", () => {
+    editorStore.loadProject(createEmptyProject());
+    editorStore.addMarker(3);
+    const marker = editorStore.getState().project.markers[0];
+    editorStore.renameMarker(marker.id, "Beat");
+    expect(editorStore.getState().project.markers[0].label).toBe("Beat");
+    expect(editorStore.getState().project.markers).toHaveLength(1);
+    editorStore.removeMarker(marker.id);
+    expect(editorStore.getState().project.markers).toHaveLength(0);
+  });
 });

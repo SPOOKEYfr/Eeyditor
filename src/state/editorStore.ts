@@ -858,6 +858,22 @@ class EditorStore {
     }), "Removed cue");
   }
 
+  removeMarker(markerId: string): void {
+    this.updateProject((project) => ({
+      ...project,
+      markers: project.markers.filter((marker) => marker.id !== markerId),
+    }), "Removed marker");
+  }
+
+  renameMarker(markerId: string, label: string): void {
+    this.updateProject((project) => ({
+      ...project,
+      markers: project.markers.map((marker) =>
+        marker.id === markerId ? { ...marker, label } : marker,
+      ),
+    }), "Renamed marker");
+  }
+
   addMarker(time: number): void {
     this.updateProject((project) => ({
       ...project,

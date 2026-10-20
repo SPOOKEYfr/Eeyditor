@@ -210,7 +210,11 @@ export function Timeline() {
 
       if (y < RULER_HEIGHT) {
         dragRef.current = { mode: "playhead" };
-        editorStore.setPlayhead(pointerToTime(event.clientX));
+        const time = pointerToTime(event.clientX);
+        const hit = state.project.markers.find(
+          (marker) => Math.abs(timeToX(marker.time, state.zoom, state.scroll) - x) < 6,
+        );
+        editorStore.setPlayhead(hit ? hit.time : time);
         return;
       }
 
