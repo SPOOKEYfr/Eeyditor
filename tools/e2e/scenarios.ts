@@ -286,7 +286,20 @@ for (const [kind, direction] of [
   report(Boolean(out) && info.includes("codec_name=gif") && info.includes("width=480"), "gif-preset");
 }
 
-// 17. Audio-only preset emits an MP3 with no video stream.
+// 17. WebM preset emits VP9 video with Opus audio.
+{
+  const { project } = generatorProject();
+  project.duration = 2;
+  project.renderPreset = { ...RENDER_PRESETS.find((preset) => preset.id === "webm-1080p30")! };
+  const out = render(project, "web", "webm");
+  const info = out ? probe(out, "stream=codec_name") : "";
+  report(
+    Boolean(out) && info.includes("codec_name=vp9") && info.includes("codec_name=opus"),
+    "webm-preset",
+  );
+}
+
+// 18. Audio-only preset emits an MP3 with no video stream.
 {
   const { project } = generatorProject("audio");
   project.duration = 2;

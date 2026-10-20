@@ -697,6 +697,21 @@ function videoCodecArgs(preset: RenderPreset): string[] {
   if (preset.videoCodec === "gif") {
     return ["-c:v", "gif", "-loop", "0"];
   }
+  if (preset.videoCodec.includes("vp9")) {
+    // libvpx-vp9 has no -preset; constant-quality mode needs -b:v 0.
+    return [
+      "-c:v",
+      preset.videoCodec,
+      "-crf",
+      String(preset.crf),
+      "-b:v",
+      "0",
+      "-row-mt",
+      "1",
+      "-pix_fmt",
+      preset.pixelFormat,
+    ];
+  }
   if (preset.hardware === "nvenc" || preset.videoCodec.endsWith("_nvenc")) {
     return [
       "-c:v",

@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-95%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-96%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -171,7 +171,8 @@ EeyditorProject
    the timeline with `setpts`;
 3. bottom-up `overlay` composition gated by `between(t, …)`;
 4. audio `atrim`/`atempo`/`volume`/`afade`/`adelay` chains mixed with `amix`;
-5. codec arguments for CPU (CRF) or hardware (NVENC) presets.
+5. codec arguments for CPU (CRF), VP9 (constant quality) or hardware (NVENC)
+   presets.
 
 Animated opacity is compiled to a bounded luma mask combined with `alphamerge`,
 which keeps the per-frame cost constant regardless of keyframe density.
@@ -185,7 +186,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (95 tests)
+npm run test           # Vitest (96 tests)
 npm run e2e            # real FFmpeg renders through the export plan
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
@@ -198,10 +199,10 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 95 / 95 passed             |
+| `vitest run`         | 96 / 96 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
-| FFmpeg end-to-end    | 46 / 46 checks passed      |
+| FFmpeg end-to-end    | 48 / 48 checks passed      |
 | GitHub Actions CI    | web + Rust jobs            |
 
 `npm run e2e` (`tools/e2e/`) drives the real `buildFfmpegPlan` output through
@@ -221,6 +222,7 @@ audio-only MP3 preset, plus per-cue subtitle placement.
 - [x] Real media probing, monitor playback and audio
 - [x] Transition rendering in monitor and export
 - [x] Effect parity between monitor and export (core subset)
+- [x] Render presets for 720p/1080p/4K, vertical, square, GIF, MP3 and WebM VP9
 - [x] Real timeline waveforms and a track mixer
 - [x] Multi-select, group move and clipboard operations
 - [x] CI: typecheck, unit tests, web build and `cargo check`

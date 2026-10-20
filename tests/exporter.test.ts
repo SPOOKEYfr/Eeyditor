@@ -356,4 +356,18 @@ describe("ffmpeg export pipeline", () => {
     expect(full.filterComplex).not.toContain("all_expr");
     expect(full.filterComplex).toContain("lut3d=file=/tmp/invert.cube");
   });
+
+  it("encodes VP9 presets with constant-quality options", () => {
+    const project = createEmptyProject();
+    const preset = RENDER_PRESETS.find((entry) => entry.id === "webm-1080p30");
+    expect(preset).toBeTruthy();
+    project.renderPreset = { ...preset! };
+    const args = buildFFmpegArgs(project, "/tmp/out.webm").join(" ");
+    expect(args).toContain("-c:v libvpx-vp9");
+    expect(args).toContain("-b:v 0");
+    expect(args).toContain("-row-mt 1");
+    expect(args).not.toContain("-preset none");
+    expect(RENDER_PRESETS.some((entry) => entry.id === "vertical-1080x1920")).toBe(true);
+    expect(RENDER_PRESETS.some((entry) => entry.id === "square-1080x1080")).toBe(true);
+  });
 });
