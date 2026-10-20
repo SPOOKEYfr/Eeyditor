@@ -388,4 +388,21 @@ describe("ffmpeg export pipeline", () => {
     expect(args).toContain("-t 1.5");
     expect(trimmed.duration).toBeCloseTo(1.5);
   });
+
+  it("drops audio from hidden tracks", () => {
+    const project = createEmptyProject();
+    project.renderPreset = { ...RENDER_PRESETS.find((preset) => preset.id === "audio-mp3-320")! };
+    const track = project.tracks.find((entry) => entry.type === "audio");
+    if (!track) throw new Error("missing audio track");
+    const source = createMediaSource({ path: "generator://h", kind: "audio", name: "H", duration: 4, hasVideo: false, hasAudio: true });
+    project.media = [source];
+    track.clips = [
+      createClip({ trackId: track.id, sourceId: source.id, start: 0, duration: 3, kind: "audio" }),
+    ];
+    expect(buildFfmpegPlan(project, "/tmp/out.mp3").args.join(" ")).toContain("-c:a libmp3lame");
+    track.hidden = true;
+    const hidden = buildFfmpegPlan(project, "/tmp/out.mp3").args.join(" ");
+    expect(hidden).not.toContain("-c:a");
+    expect(hidden).not.toContain("amix");
+  });
 });

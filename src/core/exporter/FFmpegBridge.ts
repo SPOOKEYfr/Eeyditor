@@ -457,7 +457,7 @@ export function buildFfmpegPlan(
   for (const entry of clipInputs) {
     if (!buildAudio) break;
     if (entry.audioIndex === undefined) continue;
-    if (!audibleTrack(entry.track)) continue;
+    if (entry.track.hidden || !audibleTrack(entry.track)) continue;
     const { clip } = entry;
     const chain: string[] = [];
     chain.push(
