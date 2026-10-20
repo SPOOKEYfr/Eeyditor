@@ -283,6 +283,11 @@ export interface SubtitleCue {
   color?: string;
 }
 
+export interface ExportRange {
+  start: number;
+  end: number;
+}
+
 export interface EeyditorProject {
   schemaVersion: number;
   id: string;
@@ -297,6 +302,8 @@ export interface EeyditorProject {
   subtitles: SubtitleCue[];
   media: MediaSource[];
   renderPreset: RenderPreset;
+  /** Optional output range in seconds; null/absent renders the whole timeline. */
+  exportRange: ExportRange | null;
   metadata: ProjectMetadata;
 }
 

@@ -9,7 +9,7 @@ import type {
   TrackType,
 } from "../../types/timeline";
 import { evaluateCurve } from "../keyframes/bezier";
-import { clipEnd } from "../timeline/engine";
+import { clipEnd, exportRange } from "../timeline/engine";
 import { subtitleBaseline, subtitleFontSize } from "../subtitles/style";
 import {
   hasTransition,
@@ -205,7 +205,8 @@ export function buildFfmpegPlan(
 ): FfmpegPlan {
   const preset = project.renderPreset;
   const fps = preset.fps || project.frameRate || 30;
-  const duration = Math.max(project.duration, 0.1);
+  const range = exportRange(project);
+  const duration = Math.max(range.duration, 0.1);
 
   const mediaById = new Map<string, MediaSource>(
     project.media.map((source) => [source.id, source]),
@@ -524,6 +525,7 @@ export function buildFfmpegPlan(
     args.push("-map", `[${audioLabel}]`, "-c:a", preset.audioCodec, "-b:a", preset.audioBitrate, "-ar", String(preset.audioSampleRate), "-ac", String(preset.channels));
   }
   if (audioOnly) args.push("-vn");
+  if (range.start > 0) args.push("-ss", f(range.start));
   args.push("-t", f(duration));
   if (preset.faststart && preset.container === "mp4") args.push("-movflags", "+faststart");
   args.push(outputPath);

@@ -70,7 +70,7 @@ export function ExportPanel() {
     const id = `export-${Date.now()}`;
     setJobId(id);
     setProgress(0);
-    const result = await renderExport(id, project.duration, plan.args);
+    const result = await renderExport(id, plan.duration, plan.args);
     setJobId(null);
     if (result?.success) {
       setProgress(100);
@@ -140,6 +140,51 @@ export function ExportPanel() {
             ))}
           </select>
         </label>
+        <div className="rounded-lg bg-recessed px-2 py-1.5 text-[10px] shadow-recessed-sm">
+          <div className="flex items-center gap-1.5">
+            <span className="flex-1 uppercase tracking-wider text-muted">Range</span>
+            <span className="font-mono text-[10px] text-ink">
+              {project.exportRange
+                ? `${project.exportRange.start.toFixed(2)}s - ${project.exportRange.end.toFixed(2)}s`
+                : `full (${project.duration.toFixed(2)}s)`}
+            </span>
+          </div>
+          <div className="mt-1 flex gap-1.5">
+            <button
+              type="button"
+              title="Set the export in point at the playhead"
+              onClick={() => {
+                const start = editorStore.getState().playhead;
+                const end = project.exportRange?.end ?? project.duration;
+                editorStore.setExportRange({ start, end: Math.max(start + 0.1, end) });
+              }}
+              className="flex-1 rounded-md bg-surface px-2 py-1 text-[10px] text-muted shadow-raised-sm transition-colors hover:text-ink"
+            >
+              Set in
+            </button>
+            <button
+              type="button"
+              title="Set the export out point at the playhead"
+              onClick={() => {
+                const end = editorStore.getState().playhead;
+                const start = project.exportRange?.start ?? 0;
+                if (end > start) editorStore.setExportRange({ start, end });
+              }}
+              className="flex-1 rounded-md bg-surface px-2 py-1 text-[10px] text-muted shadow-raised-sm transition-colors hover:text-ink disabled:opacity-40"
+            >
+              Set out
+            </button>
+            <button
+              type="button"
+              title="Export the whole timeline"
+              disabled={!project.exportRange}
+              onClick={() => editorStore.setExportRange(null)}
+              className="flex-1 rounded-md bg-surface px-2 py-1 text-[10px] text-muted shadow-raised-sm transition-colors hover:text-ink disabled:opacity-40"
+            >
+              Full
+            </button>
+          </div>
+        </div>
         <label className="block text-[10px] uppercase tracking-wider text-muted">
           Output
           <input

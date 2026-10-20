@@ -9,6 +9,15 @@ import { makeId } from "../project/factory";
 import { clamp } from "../keyframes/bezier";
 
 export const MIN_CLIP_DURATION = 1 / 60;
+
+/** Output range in seconds; falls back to the whole project. */
+export function exportRange(project: EeyditorProject): { start: number; end: number; duration: number } {
+  const total = Math.max(project.duration, 0);
+  const start = Math.max(0, Math.min(project.exportRange?.start ?? 0, total));
+  const end = Math.max(start, Math.min(project.exportRange?.end ?? total, total));
+  if (!(end > start)) return { start: 0, end: total, duration: total };
+  return { start, end, duration: end - start };
+}
 export const MIN_ZOOM = 4;
 export const MAX_ZOOM = 4800;
 export const SNAP_THRESHOLD_PX = 8;
@@ -386,6 +395,7 @@ export function emptyProjectShell(): EeyditorProject {
     markers: [],
     subtitles: [],
     media: [],
+    exportRange: null,
     renderPreset: {
       id: "custom",
       name: "Custom",

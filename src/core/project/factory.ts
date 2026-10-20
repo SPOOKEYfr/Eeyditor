@@ -408,6 +408,7 @@ export function createEmptyProject(name = "Untitled Project"): EeyditorProject {
     subtitles: [],
     media: [],
     renderPreset: { ...RENDER_PRESETS[1] },
+    exportRange: null,
     metadata: {
       generator: "Eeyditor",
       appVersion: "0.1.0",

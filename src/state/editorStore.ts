@@ -4,6 +4,7 @@ import {
   type EeyditorProject,
   type Keyframe,
   type KeyframeCurve,
+  type ExportRange,
   type SubtitleCue,
   type TimelineClip,
   type TrackType,
@@ -948,6 +949,15 @@ class EditorStore {
 
   setSplash(showSplash: boolean): void {
     this.patch({ showSplash });
+  }
+
+  setExportRange(range: ExportRange | null): void {
+    this.updateProject((project) => {
+      if (!range) return { ...project, exportRange: null };
+      const start = Math.max(0, Math.min(range.start, project.duration));
+      const end = Math.max(start, Math.min(range.end, project.duration));
+      return { ...project, exportRange: end > start ? { start, end } : null };
+    }, range ? "Set export range" : "Cleared export range");
   }
 
   setShortcuts(showShortcuts: boolean): void {

@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-96%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-98%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -48,6 +48,7 @@ or missing (see [Known limits](#known-limits)).
 | SRT subtitles with per-cue position, size and colour | ✅ working |
 | Timeline markers: ruler snap, Inspector jump/rename/delete | ✅ working |
 | Keyboard shortcut overlay (?, toolbar help button) | ✅ working |
+| In/out export range (timeline shading, `-ss`/`-t` trim) | ✅ working |
 | CI (typecheck, tests, build, cargo check) | ✅ configured |
 | Blend modes in monitor and export | ✅ working (13 modes) |
 | Animated GIF and audio-only MP3 export | ✅ working |
@@ -172,7 +173,7 @@ EeyditorProject
 3. bottom-up `overlay` composition gated by `between(t, …)`;
 4. audio `atrim`/`atempo`/`volume`/`afade`/`adelay` chains mixed with `amix`;
 5. codec arguments for CPU (CRF), VP9 (constant quality) or hardware (NVENC)
-   presets.
+   presets, plus an optional `-ss`/`-t` trim for the in/out export range.
 
 Animated opacity is compiled to a bounded luma mask combined with `alphamerge`,
 which keeps the per-frame cost constant regardless of keyframe density.
@@ -186,7 +187,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (96 tests)
+npm run test           # Vitest (98 tests)
 npm run e2e            # real FFmpeg renders through the export plan
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
@@ -199,10 +200,10 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 96 / 96 passed             |
+| `vitest run`         | 98 / 98 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
-| FFmpeg end-to-end    | 48 / 48 checks passed      |
+| FFmpeg end-to-end    | 51 / 51 checks passed      |
 | GitHub Actions CI    | web + Rust jobs            |
 
 `npm run e2e` (`tools/e2e/`) drives the real `buildFfmpegPlan` output through

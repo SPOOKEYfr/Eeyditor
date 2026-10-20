@@ -370,4 +370,22 @@ describe("ffmpeg export pipeline", () => {
     expect(RENDER_PRESETS.some((entry) => entry.id === "vertical-1080x1920")).toBe(true);
     expect(RENDER_PRESETS.some((entry) => entry.id === "square-1080x1080")).toBe(true);
   });
+
+  it("trims the output to the export range", () => {
+    const project = createEmptyProject();
+    const track = project.tracks.find((entry) => entry.type === "video");
+    if (!track) throw new Error("missing video track");
+    track.clips = [createClip({ trackId: track.id, start: 0, duration: 6, kind: "video" })];
+    project.duration = 6;
+    const full = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(full.args.join(" ")).not.toContain("-ss");
+    expect(full.duration).toBeCloseTo(6);
+
+    project.exportRange = { start: 2, end: 3.5 };
+    const trimmed = buildFfmpegPlan(project, "/tmp/out.mp4");
+    const args = trimmed.args.join(" ");
+    expect(args).toContain("-ss 2");
+    expect(args).toContain("-t 1.5");
+    expect(trimmed.duration).toBeCloseTo(1.5);
+  });
 });

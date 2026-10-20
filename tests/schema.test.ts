@@ -113,4 +113,18 @@ describe("Eeyditor project schema", () => {
     expect(track.height).toBeGreaterThan(0);
     expect(track.type).toBe("audio");
   });
+
+  it("round-trips the export range and rejects inverted bounds", () => {
+    const project = createEmptyProject();
+    project.duration = 10;
+    project.exportRange = { start: 1.5, end: 4 };
+    const restored = parseProject(serializeProject(project));
+    expect(restored.exportRange).toEqual({ start: 1.5, end: 4 });
+
+    const raw = JSON.parse(serializeProject(project)) as Record<string, unknown>;
+    raw.exportRange = { start: 5, end: 2 };
+    expect(parseProject(JSON.stringify(raw)).exportRange).toBeNull();
+    raw.exportRange = null;
+    expect(parseProject(JSON.stringify(raw)).exportRange).toBeNull();
+  });
 });

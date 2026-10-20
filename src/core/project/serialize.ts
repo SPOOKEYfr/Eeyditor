@@ -7,6 +7,7 @@ import {
   type EffectInstance,
   type EffectKind,
   type EeyditorProject,
+  type ExportRange,
   type HardwareAcceleration,
   type Interpolation,
   type Keyframe,
@@ -503,8 +504,18 @@ export function normalizeProject(value: unknown): EeyditorProject {
       normalizeMedia(entry, `project.media[${index}]`),
     ),
     renderPreset: normalizePreset(record.renderPreset, "project.renderPreset"),
+    exportRange: normalizeExportRange(record.exportRange, "project.exportRange"),
     metadata: normalizeMetadata(record.metadata, "project.metadata"),
   };
+}
+
+function normalizeExportRange(value: unknown, path: string): ExportRange | null {
+  if (value === undefined || value === null) return null;
+  const record = asRecord(value, path);
+  const start = Math.max(0, num(record.start, `${path}.start`, 0));
+  const end = Math.max(start, num(record.end, `${path}.end`, start));
+  if (!(end > start)) return null;
+  return { start, end };
 }
 
 export function serializeProject(project: EeyditorProject): string {

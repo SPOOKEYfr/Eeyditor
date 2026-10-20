@@ -299,7 +299,24 @@ for (const [kind, direction] of [
   );
 }
 
-// 18. Audio-only preset emits an MP3 with no video stream.
+// 18. Export range trims the output and restarts timestamps.
+{
+  const { project } = generatorProject();
+  project.duration = 4;
+  const full = render(project, "range-full");
+  const fullDuration = full ? Number((probe(full, "format=duration").match(/duration=([\d.]+)/)?.[1] ?? 0)) : 0;
+  project.exportRange = { start: 1, end: 2 };
+  const trimmed = render(project, "range-trim");
+  const trimmedDuration = trimmed
+    ? Number((probe(trimmed, "format=duration").match(/duration=([\d.]+)/)?.[1] ?? 0))
+    : 0;
+  report(
+    Boolean(full && trimmed) && fullDuration > 3.5 && trimmedDuration > 0.8 && trimmedDuration < 1.2,
+    `export-range (full=${fullDuration.toFixed(2)}s trimmed=${trimmedDuration.toFixed(2)}s)`,
+  );
+}
+
+// 19. Audio-only preset emits an MP3 with no video stream.
 {
   const { project } = generatorProject("audio");
   project.duration = 2;

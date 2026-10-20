@@ -445,6 +445,19 @@ function renderTimeline(
     }
   }
 
+  // Export range shading.
+  const range = project.exportRange;
+  if (range) {
+    const r0 = timeToX(range.start, zoom, scroll);
+    const r1 = timeToX(range.end, zoom, scroll);
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    if (r0 > 0) ctx.fillRect(0, RULER_HEIGHT, Math.min(r0, width), height - RULER_HEIGHT);
+    if (r1 < width) ctx.fillRect(Math.max(0, r1), RULER_HEIGHT, width - Math.max(0, r1), height - RULER_HEIGHT);
+    ctx.fillStyle = "rgba(255,179,0,0.9)";
+    if (r0 >= 0 && r0 <= width) ctx.fillRect(r0 - 1, RULER_HEIGHT, 2, height - RULER_HEIGHT);
+    if (r1 >= 0 && r1 <= width) ctx.fillRect(r1 - 1, RULER_HEIGHT, 2, height - RULER_HEIGHT);
+  }
+
   // Markers.
   ctx.fillStyle = "rgba(255,179,0,0.85)";
   for (const marker of project.markers) {
