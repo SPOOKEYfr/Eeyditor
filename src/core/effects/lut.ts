@@ -78,7 +78,10 @@ export function applyLutToRgba(
   width: number,
   height: number,
   lut: LutTable,
+  strength = 1,
 ): void {
+  const mix = clamp01(strength);
+  const untouched = 1 - mix;
   const n = lut.size;
   const max = n - 1;
   const span = [lut.domainMax[0] - lut.domainMin[0], lut.domainMax[1] - lut.domainMin[1], lut.domainMax[2] - lut.domainMin[2]];
@@ -123,7 +126,9 @@ export function applyLutToRgba(
       const cy0 = cx00 + (cx10 - cx00) * ty;
       const cy1 = cx01 + (cx11 - cx01) * ty;
       const value = cy0 + (cy1 - cy0) * tz;
-      data[offset + channel] = Math.round(clamp01(value) * 255);
+      const mapped = clamp01(value) * 255;
+      data[offset + channel] =
+        mix >= 1 ? Math.round(mapped) : Math.round(data[offset + channel] * untouched + mapped * mix);
     }
   }
 }
@@ -138,12 +143,26 @@ export function rememberCube(path: string, lut: LutTable | null): void {
   cache.set(path, lut);
 }
 
-/** Path of the first enabled LUT effect on a clip, if any. */
-export function lutPath(effects: { kind: string; enabled: boolean; params: Record<string, number | string | boolean> }[]): string | null {
+export interface LutApplication {
+  path: string;
+  strength: number;
+}
+
+/** First enabled LUT effect on a clip, with its blend strength. */
+export function lutEffect(
+  effects: { kind: string; enabled: boolean; amount: number; params: Record<string, number | string | boolean> }[],
+): LutApplication | null {
   for (const effect of effects) {
     if (effect.kind !== "lut" || !effect.enabled) continue;
     const path = effect.params.path;
-    if (typeof path === "string" && path.length > 0) return path;
+    if (typeof path === "string" && path.length > 0) {
+      return { path, strength: clamp01(effect.amount) };
+    }
   }
   return null;
+}
+
+/** Path of the first enabled LUT effect on a clip, if any. */
+export function lutPath(effects: { kind: string; enabled: boolean; params: Record<string, number | string | boolean> }[]): string | null {
+  return lutEffect(effects as never)?.path ?? null;
 }

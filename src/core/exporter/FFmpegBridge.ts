@@ -375,6 +375,23 @@ export function buildFfmpegPlan(
       );
     }
 
+    // Partial-strength LUT: grade a copy and blend it back over the source so
+    // the monitor and the exported file agree on intensity.
+    let clipLabel = label;
+    const partialLut = partialLutEffect(clip);
+    if (partialLut) {
+      const graded = `${label}graded`;
+      const plain = `${label}plain`;
+      const applied = `${label}lut`;
+      const weight = f(partialLut.strength);
+      filters.push(`[${label}]format=gbrp,split[${plain}][${graded}]`);
+      filters.push(`[${graded}]lut3d=file=${escapeFilterGraph(partialLut.path)}[${graded}applied]`);
+      filters.push(
+        `[${plain}][${graded}applied]blend=all_expr=${escapeFilterGraph(`A*(1-${weight})+B*${weight}`)},format=rgba[${applied}]`,
+      );
+      clipLabel = applied;
+    }
+
     const posX = staticOrExpression(clip.transform.positionX, fps);
     const posY = staticOrExpression(clip.transform.positionY, fps);
     const slide = slideExpression(clip);
@@ -392,13 +409,13 @@ export function buildFfmpegPlan(
       const alpha = `${label}alpha`;
       const main = `${label}main`;
       filters.push(`${videoCursor}format=rgba,split[${blended}base][${main}]`);
-      filters.push(`[${label}]format=rgba,split[${blended}clip][${alpha}src]`);
+      filters.push(`[${clipLabel}]format=rgba,split[${blended}clip][${alpha}src]`);
       filters.push(`[${blended}base][${blended}clip]blend=all_mode=${FFMPEG_BLEND[blendMode]}[${blended}]`);
       filters.push(`[${alpha}src]alphaextract[${alpha}]`);
       filters.push(`[${blended}][${alpha}]alphamerge[${masked}]`);
       filters.push(`[${main}][${masked}]overlay=${overlayArgs}${next}`);
     } else {
-      filters.push(`${videoCursor}[${label}]overlay=${overlayArgs}${next}`);
+      filters.push(`${videoCursor}[${clipLabel}]overlay=${overlayArgs}${next}`);
     }
     videoCursor = next;
   }
@@ -609,6 +626,17 @@ function slideExpression(clip: TimelineClip): { x: string; y: string } {
   };
 }
 
+function partialLutEffect(clip: TimelineClip): { path: string; strength: number } | null {
+  for (const effect of clip.effects) {
+    if (effect.kind !== "lut" || !effect.enabled) continue;
+    const path = effect.params.path;
+    if (typeof path !== "string" || path.length === 0) continue;
+    if (effect.amount >= 1) return null;
+    return { path, strength: Math.max(0, effect.amount) };
+  }
+  return null;
+}
+
 function effectFilter(
   kind: string,
   amount: number,
@@ -638,9 +666,11 @@ function effectFilter(
     }
     case "lut": {
       const path = params.path;
-      return typeof path === "string" && path.length > 0
-        ? `lut3d=file=${escapeFilterGraph(path)}`
-        : null;
+      if (typeof path !== "string" || path.length === 0) return null;
+      // Partial-strength LUTs are staged at graph level (see below) so the
+      // graded result can be blended back over the source.
+      if (amount < 1) return null;
+      return `lut3d=file=${escapeFilterGraph(path)}`;
     }
     default:
       return "null";

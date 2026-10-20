@@ -16,7 +16,7 @@
   <img alt="React 18" src="https://img.shields.io/badge/React-18-61DAFB.svg" />
   <img alt="TypeScript 5" src="https://img.shields.io/badge/TypeScript-5-3178C6.svg" />
   <img alt="Rust stable" src="https://img.shields.io/badge/Rust-stable-000000.svg" />
-  <img alt="Tests" src="https://img.shields.io/badge/tests-93%20passing-brightgreen.svg" />
+  <img alt="Tests" src="https://img.shields.io/badge/tests-94%20passing-brightgreen.svg" />
 </p>
 
 Eeyditor is original software released under the **GNU General Public License
@@ -41,7 +41,7 @@ or missing (see [Known limits](#known-limits)).
 | Program monitor with real video/image/audio playback | ✅ working (codec-dependent) |
 | Deterministic FFmpeg export (verified end-to-end) | ✅ working |
 | Transitions in monitor and export | ✅ fade, dissolve, zoom, wipe, slide |
-| Effect stack in monitor and export | ✅ working (incl. chroma key and .cube LUTs) |
+| Effect stack in monitor and export | ✅ working (incl. chroma key, `.cube` LUTs with partial strength) |
 | Real waveforms (audio clips and audio-bearing video clips), track mixer, multi-select (shift/ctrl + marquee), clipboard | ✅ working |
 | Clip link groups (move/trim/split/delete together) | ✅ working |
 | Clip and track locking (blocks timeline edits) | ✅ working |
@@ -184,7 +184,7 @@ Linux also needs the Tauri system libraries (`webkit2gtk-4.1`, `gtk+-3.0`,
 ```bash
 npm install
 npm run dev            # Vite dev server
-npm run test           # Vitest (93 tests)
+npm run test           # Vitest (94 tests)
 npm run e2e            # real FFmpeg renders through the export plan
 npm run typecheck      # tsc --noEmit
 npm run build          # typecheck + production bundle
@@ -197,10 +197,10 @@ npm run tauri:build    # bundled desktop build
 | Gate                 | Result                     |
 | -------------------- | -------------------------- |
 | `tsc --noEmit`       | clean                      |
-| `vitest run`         | 93 / 93 passed             |
+| `vitest run`         | 94 / 94 passed             |
 | `vite build`         | success                    |
 | `cargo check`        | success                    |
-| FFmpeg end-to-end    | 43 / 43 checks passed      |
+| FFmpeg end-to-end    | 46 / 46 checks passed      |
 | GitHub Actions CI    | web + Rust jobs            |
 
 `npm run e2e` (`tools/e2e/`) drives the real `buildFfmpegPlan` output through
@@ -233,9 +233,9 @@ audio-only MP3 preset, plus per-cue subtitle placement.
   GStreamer on Linux); unsupported files fall back to a labelled placeholder.
 - The monitor applies blur, brightness, contrast, saturation, hue, glow,
   vignette, chroma key, 3D `.cube` LUTs and an approximate 3x3 unsharp mask.
-- The `lut` effect reads `params.path`; only `.cube` 3D LUTs are parsed, the
-  effect `amount` is ignored (the LUT applies at full strength) and monitor LUT
-  work happens on the capped preview scratch buffer.
+- The `lut` effect reads `params.path`; only `.cube` 3D LUTs are parsed, a
+  partial `amount` blends the grade over the source in both monitor and export,
+  and monitor LUT work happens on the capped preview scratch buffer.
 - Zoom transitions scale about the clip anchor with a simultaneous fade; the
   export scales the padded frame per frame rather than re-cropping the source.
 - Subtitles support per-cue vertical position, size scale and colour, but the

@@ -240,7 +240,29 @@ for (const [kind, direction] of [
   report(Boolean(baseline && lutted) && complement, `lut-inverts (before=${before.join(",")} after=${after.join(",")})`);
 }
 
-// 14. Per-cue subtitle position changes where the text is burned in.
+// 14. A half-strength LUT lands between the source and the full grade.
+{
+  const cube = join(process.cwd(), "tools/e2e/fixtures/invert.cube");
+  const baseline = render(generatorProject().project, "lut-half-baseline");
+  const partial = generatorProject();
+  const effect = createEffect("lut");
+  effect.amount = 0.5;
+  effect.params.path = cube;
+  partial.clip.effects = [effect];
+  const half = render(partial.project, "lut-half");
+  const before = baseline ? sample(baseline, 2, "1:1") : [];
+  const after = half ? sample(half, 2, "1:1") : [];
+  const between =
+    before.length === 3 &&
+    after.length === 3 &&
+    before.every((value, index) => {
+      const midpoint = (value + (255 - value)) / 2;
+      return Math.abs(after[index] - midpoint) < 30 && after[index] !== 255 - value;
+    });
+  report(Boolean(baseline && half) && between, `lut-half-strength (before=${before.join(",")} after=${after.join(",")})`);
+}
+
+// 15. Per-cue subtitle position changes where the text is burned in.
 {
   const burn = (position: "bottom" | "top") => {
     const project = createEmptyProject("Cue");
@@ -254,7 +276,7 @@ for (const [kind, direction] of [
   report(Boolean(low && high) && distanceCue > 20, `subtitle-position (delta=${distanceCue})`);
 }
 
-// 15. Animated GIF preset emits a real GIF.
+// 16. Animated GIF preset emits a real GIF.
 {
   const { project } = generatorProject();
   project.duration = 2;
@@ -264,7 +286,7 @@ for (const [kind, direction] of [
   report(Boolean(out) && info.includes("codec_name=gif") && info.includes("width=480"), "gif-preset");
 }
 
-// 16. Audio-only preset emits an MP3 with no video stream.
+// 17. Audio-only preset emits an MP3 with no video stream.
 {
   const { project } = generatorProject("audio");
   project.duration = 2;

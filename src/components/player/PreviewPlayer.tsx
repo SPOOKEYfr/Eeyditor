@@ -27,7 +27,7 @@ import {
   wipeRect,
   zoomFactor,
 } from "../../core/timeline/transitions";
-import { applyLutToRgba, cachedCube, lutPath, parseCube, rememberCube } from "../../core/effects/lut";
+import { applyLutToRgba, cachedCube, lutEffect, lutPath, parseCube, rememberCube } from "../../core/effects/lut";
 import { subtitleBaseline, subtitleFontSize } from "../../core/subtitles/style";
 import { convertMediaUrl, invokeSafe, isTauri } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
@@ -204,8 +204,8 @@ function drawMediaClip(
   const fx = canvasEffectPlan(clip.effects);
   const key = chromaKeyStrength(clip.effects);
   const sharpen = effectAmount(clip.effects, "sharpen");
-  const lutFile = lutPath(clip.effects);
-  const lut = lutFile ? cachedCube(lutFile) ?? null : null;
+  const lutEffectSpec = lutEffect(clip.effects);
+  const lut = lutEffectSpec ? cachedCube(lutEffectSpec.path) ?? null : null;
   const wipe = wipeRect(clip, local, rect);
   const slide = slideOffset(clip, local, rect);
 
@@ -242,7 +242,7 @@ function drawMediaClip(
     if (key > 0) applyChromaKey(keyCtx, keyWidth, keyHeight, key);
     if (lut) {
       const frame = keyCtx.getImageData(0, 0, keyWidth, keyHeight);
-      applyLutToRgba(frame.data, keyWidth, keyHeight, lut);
+      applyLutToRgba(frame.data, keyWidth, keyHeight, lut, lutEffectSpec?.strength ?? 1);
       keyCtx.putImageData(frame, 0, 0);
     }
     if (sharpen > 0) applySharpen(keyCtx, keyWidth, keyHeight, sharpen);

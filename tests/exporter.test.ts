@@ -336,4 +336,24 @@ describe("ffmpeg export pipeline", () => {
     const second = buildFFmpegArgs(project, "/tmp/out.mp4");
     expect(first).toEqual(second);
   });
+
+  it("blends a partial-strength LUT over the source", () => {
+    const project = createEmptyProject();
+    const track = project.tracks.find((entry) => entry.type === "video");
+    if (!track) throw new Error("missing video track");
+    const clip = createClip({ trackId: track.id, start: 0, duration: 3, kind: "video" });
+    track.clips = [clip];
+    clip.effects = [
+      { id: "e1", kind: "lut", enabled: true, amount: 0.4, params: { path: "/tmp/invert.cube" } },
+    ];
+    const plan = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(plan.filterComplex).toContain("blend=all_expr=A*(1-0.4)+B*0.4");
+    expect(plan.filterComplex).toContain("split[v");
+    expect(plan.filterComplex).toContain("lut3d=file=/tmp/invert.cube");
+
+    clip.effects[0].amount = 1;
+    const full = buildFfmpegPlan(project, "/tmp/out.mp4");
+    expect(full.filterComplex).not.toContain("all_expr");
+    expect(full.filterComplex).toContain("lut3d=file=/tmp/invert.cube");
+  });
 });
