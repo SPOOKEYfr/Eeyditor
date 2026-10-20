@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { editorStore } from "../src/state/editorStore";
-import { createDemoProject, createEmptyProject } from "../src/core/project/factory";
+import { createDemoProject, createEmptyProject, createMediaSource } from "../src/core/project/factory";
 
 function firstClipId(): string {
   const project = editorStore.getState().project;
@@ -221,3 +221,59 @@ describe("clip clipboard", () => {
     expect(editorStore.getState().showShortcuts).toBe(false);
   });
 });
+
+describe("dropping media onto lanes", () => {
+  beforeEach(() => {
+    editorStore.loadProject(createEmptyProject());
+  });
+
+  it("places a source on the requested track, overwriting overlaps", () => {
+    editorStore.updateProject((project) => ({
+      ...project,
+      media: [createMediaSource({ id: "s1", path: "generator://a", kind: "video", name: "A", duration: 4, hasVideo: true, hasAudio: false })],
+    }), "Adds a media source for the test");
+    const video = editorStore.getState().project.tracks.find((track) => track.type === "video")!;
+    editorStore.addSourceAt("s1", video.id, 1);
+    let clips = editorStore.getState().project.tracks[0].clips;
+    expect(clips).toHaveLength(1);
+    expect(clips[0].start).toBe(1);
+    expect(clips[0].duration).toBeCloseTo(4);
+
+    editorStore.addSourceAt("s1", video.id, 2);
+    clips = editorStore.getState().project.tracks[0].clips;
+    expect(clips).toHaveLength(2);
+    expect(clips[0].duration).toBeCloseTo(1);
+    expect(clips[1].start).toBe(2);
+    expect(clips[1].duration).toBeCloseTo(4);
+  });
+
+  it("rejects audio on visual tracks and media on text tracks", () => {
+    const source = createMediaSource({ path: "generator://song", kind: "audio", name: "Song", duration: 4, hasVideo: false, hasAudio: true });
+    editorStore.updateProject((project) => ({ ...project, media: [source] }), "Adds a media source for the test");
+    const before = editorStore.getState().project.tracks.flatMap((track) => track.clips).length;
+    const video = editorStore.getState().project.tracks.find((track) => track.type === "video")!;
+    editorStore.addSourceAt(source.id, video.id, 0);
+    expect(editorStore.getState().status).toBe("Audio goes on audio tracks");
+    const text = editorStore.getState().project.tracks.find((track) => track.type === "text")!;
+    editorStore.addSourceAt(source.id, text.id, 0);
+    expect(editorStore.getState().status).toBe("Drop media on a video or audio track");
+    const after = editorStore.getState().project.tracks.flatMap((track) => track.clips).length;
+    expect(after).toBe(before);
+  });
+
+  it("refuses locked tracks", () => {
+    const source = createMediaSource({ path: "generator://v", kind: "video", name: "V", duration: 2, hasVideo: true, hasAudio: false });
+    editorStore.updateProject((project) => ({
+      ...project,
+      media: [source],
+      tracks: project.tracks.map((track) =>
+        track.type === "video" ? { ...track, locked: true } : track,
+      ),
+    }), "Locks a track for the test");
+    const video = editorStore.getState().project.tracks.find((track) => track.type === "video")!;
+    editorStore.addSourceAt(source.id, video.id, 0);
+    expect(editorStore.getState().status).toBe("Track is locked");
+    expect(editorStore.getState().project.tracks.flatMap((track) => track.clips)).toHaveLength(0);
+  });
+});
+

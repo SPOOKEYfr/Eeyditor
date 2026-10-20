@@ -4,8 +4,11 @@ import type { MediaSource, SourceKind } from "../../types/timeline";
 import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { createMediaSource, makeId } from "../../core/project/factory";
 import { captureThumbnail } from "../../core/media/thumbnail";
+import { setDragSource } from "../../core/dragSource";
 import { parseSrt } from "../../core/subtitles/srt";
-import { convertMediaUrl, invokeSafe, pickOpenPaths, probeMedia } from "../../lib/tauri";
+import { parseProject } from "../../core/project/serialize";
+import { clearAutosave } from "../../lib/autosave";
+import { convertMediaUrl, invokeSafe, onFileDrop, pickOpenPaths, probeMedia } from "../../lib/tauri";
 import { NeumorphicButton, NeumorphicPanel } from "../neumorphic";
 
 const thumbnailCache = new Map<string, string>();
@@ -82,6 +85,65 @@ export function MediaBin() {
       "Added media",
     );
   };
+
+  const importSrtPath = async (path: string) => {
+    const contents = await invokeSafe<string>("load_project", { path });
+    if (!contents) return false;
+    const cues = parseSrt(contents);
+    if (cues.length === 0) return false;
+    editorStore.updateProject(
+      (project) => ({ ...project, subtitles: cues }),
+      `Imported ${cues.length} subtitle cues`,
+    );
+    return true;
+  };
+
+  const importMediaPaths = async (paths: string[]) => {
+    await importMediaPaths(paths);
+  };
+
+  const handleDroppedPaths = async (paths: string[]) => {
+    let media = 0;
+    for (const path of paths) {
+      const extension = path.split(".").pop()?.toLowerCase() ?? "";
+      if (extension === "eeyproj" || extension === "json") {
+        const contents = await invokeSafe<string>("load_project", { path });
+        if (!contents) continue;
+        try {
+          clearAutosave();
+          editorStore.loadProject(parseProject(contents));
+        } catch {
+          editorStore.setStatus(`Could not open ${path.split(/[\\/]/).pop()}`);
+        }
+        continue;
+      }
+      if (extension === "srt") {
+        const ok = await importSrtPath(path);
+        if (!ok) editorStore.setStatus(`No valid cues in ${path.split(/[\\/]/).pop()}`);
+        continue;
+      }
+      media += 1;
+      void importMediaPaths([path]);
+    }
+    if (media > 0 && paths.length === media) return;
+    if (media === 0) editorStore.setStatus("Nothing importable in the drop");
+  };
+
+  useEffect(() => {
+    let active = true;
+    let stop = () => {};
+    void onFileDrop((paths) => {
+      if (active) void handleDroppedPaths(paths);
+    }).then((unsubscribe) => {
+      if (active) stop = unsubscribe;
+      else unsubscribe();
+    });
+    return () => {
+      active = false;
+      stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleImportSubtitles = async () => {
     const paths = await pickOpenPaths(["srt"], false);
@@ -299,7 +361,16 @@ export function MediaBin() {
           <button
             key={source.id}
             type="button"
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData("text/eey-source", source.id);
+              event.dataTransfer.setData("text/plain", source.id);
+              event.dataTransfer.effectAllowed = "copy";
+              setDragSource(source.id);
+            }}
+            onDragEnd={() => setDragSource(null)}
             onClick={() => addToTimeline(source)}
+            title="Drag onto a timeline lane or click to add at the playhead"
             className="flex w-full items-center gap-2 rounded-xl bg-recessed px-2.5 py-2 text-left shadow-recessed-sm transition-colors hover:bg-surface"
           >
             <span className="grid h-9 w-14 shrink-0 place-items-center overflow-hidden rounded-lg bg-surface text-amber shadow-raised-sm">

@@ -22,6 +22,7 @@ import {
 import {
   clampZoom,
   closeGaps as closeGapsEngine,
+  overwriteRange,
   MIN_CLIP_DURATION,
   moveClip as moveClipEngine,
   moveClipsTo,
@@ -595,6 +596,43 @@ class EditorStore {
       (project) => ({ ...project, tracks: project.tracks.filter((t) => t.id !== trackId) }),
       "Removed track",
     );
+  }
+
+  /** Place a media source on a specific track at a specific time, overwriting overlaps. */
+  addSourceAt(sourceId: string, trackId: string, start: number): void {
+    const track = this.state.project.tracks.find((candidate) => candidate.id === trackId);
+    if (!track) {
+      this.patch({ status: "No such track" });
+      return;
+    }
+    if (track.locked) {
+      this.patch({ status: "Track is locked" });
+      return;
+    }
+    const source = this.state.project.media.find((entry) => entry.id === sourceId);
+    if (!source) return;
+    const isAudio = source.kind === "audio";
+    const wronglyPlaced = track.type === "audio" ? !isAudio : isAudio || track.type === "text";
+    if (wronglyPlaced) {
+      if (track.type === "text") this.patch({ status: "Drop media on a video or audio track" });
+      else this.patch({ status: `Audio goes on audio tracks` });
+      return;
+    }
+    const kind = isAudio ? "audio" : source.kind;
+    const duration = source.kind === "image" ? 4 : source.duration > 0 ? source.duration : 8;
+    const clip: TimelineClip = {
+      ...createClip({ trackId, start, duration, kind }),
+      sourceId: source.id,
+      name: source.name,
+    };
+    this.updateProject((project) => ({
+      ...project,
+      tracks: project.tracks.map((candidate) =>
+        candidate.id === trackId
+          ? { ...candidate, clips: overwriteRange(candidate.clips, clip, start) }
+          : candidate,
+      ),
+    }), `Placed ${source.name}`);
   }
 
   addClip(trackId: string, start: number): string {

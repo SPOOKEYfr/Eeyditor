@@ -24,6 +24,7 @@ import {
   xToTime,
 } from "../../core/timeline/engine";
 import { syntheticChannel, waveformBand, waveformSample } from "../../core/audio/waveform";
+import { dragSource, setDragSource } from "../../core/dragSource";
 import { audioWaveform } from "../../lib/tauri";
 import { NeumorphicButton } from "../neumorphic";
 import { TrackHeader } from "./TrackHeader";
@@ -107,6 +108,7 @@ export function Timeline() {
   const scrollYRef = useRef(0);
   const [scrollY, setScrollY] = useState(0);
   const dragRef = useRef<DragState | null>(null);
+  const dropPreviewRef = useRef<DropPreview | null>(null);
   const snapLineRef = useRef<number | null>(null);
 
   const tracks = useEditorSelector((state) => state.project.tracks);
@@ -158,7 +160,16 @@ export function Timeline() {
 
     const draw = () => {
       const ctx = canvas.getContext("2d");
-      if (ctx) renderTimeline(ctx, width, height, scrollYRef.current, snapLineRef.current, dragRef.current);
+      if (ctx)
+        renderTimeline(
+          ctx,
+          width,
+          height,
+          scrollYRef.current,
+          snapLineRef.current,
+          dragRef.current,
+          dropPreviewRef.current,
+        );
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
@@ -314,6 +325,68 @@ export function Timeline() {
     [pointerToTime],
   );
 
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLCanvasElement>) => {
+    if (!event.dataTransfer.types.includes("text/eey-source")) return;
+    if (!dragSource()) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const state = editorStore.getState();
+    const y = event.clientY - rect.top;
+    const lane = computeLanes(state.project.tracks, scrollYRef.current).find(
+      (entry) => y >= entry.y && y <= entry.y + entry.height,
+    );
+    if (!lane) {
+      dropPreviewRef.current = null;
+      return;
+    }
+    const time = Math.max(0, pointerToTime(event.clientX));
+    const source = state.project.media.find((entry) => entry.id === dragSource());
+    dropPreviewRef.current = {
+      trackId: lane.track.id,
+      time,
+      height: lane.height - LANE_GAP,
+      y: lane.y,
+      valid: Boolean(
+        source &&
+          (source.kind === "audio"
+            ? lane.track.type === "audio"
+            : lane.track.type === "video" || lane.track.type === "overlay"),
+      ),
+    };
+  }, [pointerToTime]);
+
+  const handleDragLeave = useCallback(() => {
+    dropPreviewRef.current = null;
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLCanvasElement>) => {
+      dropPreviewRef.current = null;
+      const sourceId = dragSource();
+      if (!sourceId) return;
+      event.preventDefault();
+      setDragSource(null);
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const state = editorStore.getState();
+      const y = event.clientY - rect.top;
+      const lane = computeLanes(state.project.tracks, scrollYRef.current).find(
+        (entry) => y >= entry.y && y <= entry.y + entry.height,
+      );
+      if (!lane) {
+        editorStore.setStatus("Drop onto a track lane");
+        return;
+      }
+      const time = Math.max(0, pointerToTime(event.clientX));
+      editorStore.addSourceAt(sourceId, lane.track.id, time);
+    },
+    [pointerToTime],
+  );
+
   const handlePointerUp = useCallback(() => {
     const drag = dragRef.current;
     dragRef.current = null;
@@ -375,6 +448,9 @@ export function Timeline() {
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onDragLeave={handleDragLeave}
           />
           <span hidden>{visualTick}</span>
         </div>
@@ -382,6 +458,14 @@ export function Timeline() {
       <KeyframeTrack />
     </section>
   );
+}
+
+interface DropPreview {
+  trackId: string;
+  time: number;
+  height: number;
+  y: number;
+  valid: boolean;
 }
 
 interface DragState {
@@ -415,6 +499,7 @@ function renderTimeline(
   scrollY: number,
   snapLine: number | null,
   drag: DragState | null,
+  preview?: DropPreview | null,
 ): void {
   const state = editorStore.getState();
   const { project, zoom, scroll, playhead } = state;
@@ -477,6 +562,20 @@ function renderTimeline(
     ctx.moveTo(x, RULER_HEIGHT);
     ctx.lineTo(x, height);
     ctx.stroke();
+  }
+
+  // Drop preview.
+  if (preview) {
+    const px0 = timeToX(preview.time, zoom, scroll);
+    const lane = lanes.find((entry) => entry.track.id === preview.trackId);
+    const laneY = lane ? lane.y : preview.y;
+    const widthPreview = px0 + 120 < 0 ? 0 : 120;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = preview.valid ? "#FFB300" : "#E60067";
+    roundRect(ctx, Math.max(-20, px0), laneY + 4, Math.max(12, widthPreview), preview.height - 8, 7);
+    ctx.fill();
+    ctx.restore();
   }
 
   // Playhead.

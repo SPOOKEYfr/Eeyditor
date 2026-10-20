@@ -67,6 +67,20 @@ export async function onExportProgress(
   }
 }
 
+/** Subscribe to OS file drops; returns an unsubscribe function. */
+export async function onFileDrop(handler: (paths: string[]) => void): Promise<() => void> {
+  if (!isTauri()) return () => {};
+  try {
+    const { getCurrentWebview } = await import("@tauri-apps/api/webview");
+    return await getCurrentWebview().onDragDropEvent((event) => {
+      if (event.payload.type === "drop") handler(event.payload.paths);
+    });
+  } catch (error) {
+    console.error("[eeyditor] file drop listener failed", error);
+    return () => {};
+  }
+}
+
 const mediaUrlCache = new Map<string, string>();
 
 /**
