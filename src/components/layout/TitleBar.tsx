@@ -1,8 +1,8 @@
-import { Minus, Square, X } from "lucide-react";
+import { CircleHelp, Minus, Square, X } from "lucide-react";
 import type { Window as TauriWindow } from "@tauri-apps/api/window";
 import logo from "../../assets/logo.png";
 import { isTauri } from "../../lib/tauri";
-import { useEditorSelector } from "../../state/editorStore";
+import { editorStore, useEditorSelector } from "../../state/editorStore";
 import { cn } from "../../lib/cn";
 
 async function withWindow(action: (win: TauriWindow) => Promise<void>): Promise<void> {
@@ -50,6 +50,11 @@ export function TitleBar() {
       </div>
 
       <div className="flex items-center gap-1">
+        <WindowButton
+          title="Keyboard shortcuts"
+          onClick={() => editorStore.setShortcuts(true)}
+          icon={<CircleHelp size={14} />}
+        />
         <WindowButton title="Minimize" onClick={() => withWindow((win) => win.minimize())} icon={<Minus size={14} />} />
         <WindowButton title="Maximize" onClick={() => withWindow((win) => win.toggleMaximize())} icon={<Square size={12} />} />
         <WindowButton

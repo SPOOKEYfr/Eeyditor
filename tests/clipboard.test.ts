@@ -212,4 +212,12 @@ describe("clip clipboard", () => {
     editorStore.removeMarker(marker.id);
     expect(editorStore.getState().project.markers).toHaveLength(0);
   });
+
+  it("toggles the shortcuts overlay", () => {
+    expect(editorStore.getState().showShortcuts).toBe(false);
+    editorStore.setShortcuts(true);
+    expect(editorStore.getState().showShortcuts).toBe(true);
+    editorStore.setShortcuts(false);
+    expect(editorStore.getState().showShortcuts).toBe(false);
+  });
 });

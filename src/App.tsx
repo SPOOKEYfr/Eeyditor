@@ -1,4 +1,5 @@
 import { TitleBar } from "./components/layout/TitleBar";
+import { ShortcutsOverlay } from "./components/layout/ShortcutsOverlay";
 import { Splash } from "./components/layout/Splash";
 import { MediaBin } from "./components/layout/MediaBin";
 import { Inspector } from "./components/layout/Inspector";
@@ -16,6 +17,7 @@ export default function App() {
     <div className="flex h-screen flex-col overflow-hidden bg-canvas text-ink">
       <TitleBar />
       <Splash />
+      <ShortcutsOverlay />
       <main
         className="grid min-h-0 flex-1 gap-2 p-2"
         style={{

@@ -20,6 +20,12 @@ export function useShortcuts(): void {
       const key = event.key.toLowerCase();
       const frame = 1 / state.project.frameRate;
 
+      if (key === "?" || (event.shiftKey && key === "/")) {
+        event.preventDefault();
+        store.setShortcuts(!state.showShortcuts);
+        return;
+      }
+
       if (event.code === "Space") {
         event.preventDefault();
         store.togglePlay();

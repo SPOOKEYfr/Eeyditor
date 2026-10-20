@@ -56,6 +56,7 @@ export interface EditorState {
   selectedTrackId: string | null;
   status: string;
   showSplash: boolean;
+  showShortcuts: boolean;
   past: EeyditorProject[];
   future: EeyditorProject[];
 }
@@ -97,6 +98,7 @@ class EditorStore {
       selectedTrackId: project.tracks[0]?.id ?? null,
       status: "Ready",
       showSplash: true,
+      showShortcuts: false,
       past: [],
       future: [],
     };
@@ -946,6 +948,10 @@ class EditorStore {
 
   setSplash(showSplash: boolean): void {
     this.patch({ showSplash });
+  }
+
+  setShortcuts(showShortcuts: boolean): void {
+    this.patch({ showShortcuts });
   }
 }
 
