@@ -8,6 +8,7 @@ import {
   Undo2,
   ZoomIn,
   ZoomOut,
+  Maximize2,
 } from "lucide-react";
 import type { EeyditorProject, TimelineClip, TimelineTrack } from "../../types/timeline";
 import {
@@ -336,6 +337,15 @@ export function Timeline() {
     [pointerToTime],
   );
 
+  const handleFitZoom = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const width = canvas.clientWidth || canvas.width;
+    const duration = editorStore.getState().project.duration || 1;
+    editorStore.setZoom(Math.max(1, (width - 24) / Math.max(duration, 0.1)), 0);
+    editorStore.setScroll(0);
+  }, []);
+
   const handleDragOver = useCallback((event: React.DragEvent<HTMLCanvasElement>) => {
     if (!event.dataTransfer.types.includes("text/eey-source")) return;
     if (!dragSource()) return;
@@ -427,7 +437,7 @@ export function Timeline() {
 
   return (
     <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.03] bg-surface shadow-raised">
-      <TimelineToolbar />
+      <TimelineToolbar onFitZoom={handleFitZoom} />
       <div className="relative flex min-h-0 flex-1">
         <div
           className="relative z-10 shrink-0 border-r border-black/50 bg-[#15161d]"
@@ -767,7 +777,7 @@ function drawRuler(
   ctx.stroke();
 }
 
-function TimelineToolbar() {
+function TimelineToolbar({ onFitZoom }: { onFitZoom: () => void }) {
   const tool = useEditorSelector((state) => state.tool);
   const snap = useEditorSelector((state) => state.snapEnabled);
   const canUndo = useEditorSelector((state) => state.past.length > 0);
@@ -844,6 +854,13 @@ function TimelineToolbar() {
           title="Zoom in"
           onClick={() => editorStore.zoomBy(1.35)}
           icon={<ZoomIn size={15} />}
+        />
+        <NeumorphicButton
+          size="sm"
+          iconOnly
+          title="Fit project in view"
+          onClick={onFitZoom}
+          icon={<Maximize2 size={15} />}
         />
       </div>
     </div>
